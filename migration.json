@@ -48,5 +48,57 @@
     "docs/model-comparison-results.md": "f0f07db869136bae0fc4ec0ce396a3482fbd8a48ab7870a61ffe3cc8ec3d52ff",
     "internal/scan/adversarial_test.go": "114f3c350ee17733ee901a80d400697cca2674991b2804f9d6b51203b3876ed5"
   },
-  "embedded_model_sha256": "679108547f662836e3056ddb44a76d0a093bdfaaf12447782a685a4a57474e5a"
+  "embedded_model_sha256": "679108547f662836e3056ddb44a76d0a093bdfaaf12447782a685a4a57474e5a",
+  "additional_migrations": [
+    {
+      "source_commit": "90431804aaaa8f6d6d25946d130f35da377b8719",
+      "files": [
+        {
+          "source_path": "internal/scan/normalize/gen/main.go",
+          "destination_path": "cmd/gen-confusables/main.go",
+          "original_sha256": "d50ac2a45d58cc57cbe508d9a6eff2d320629530cf2018b7c0fd874762750ff9"
+        },
+        {
+          "source_path": "internal/scan/normalize/gen/confusables.txt",
+          "destination_path": "datasets/unicode/confusables.txt",
+          "original_sha256": "6ed3ee967c9dfdf6677d563c9985182fbc50a2efb7d6059cd57b2e2ce18f5b92"
+        },
+        {
+          "source_path": "docs/idea.md",
+          "destination_path": "docs/history/idea.md",
+          "original_sha256": "172fe024945d4e2f07221df8207485b7ac1f7767794b292c5efc2e794b051e31"
+        },
+        {
+          "source_path": "docs/status.md",
+          "destination_path": "docs/history/status.md",
+          "original_sha256": "af63967a32dea120fd62c5ef5f8cebfbce0ffe9227c50966f2e6c8b40627b805"
+        },
+        {
+          "source_path": "testdata/clean/README.md",
+          "destination_path": "testdata/examples/clean/README.md",
+          "original_sha256": "b249166f3ecddd289df367d0e5d62329a73bc26abd325f46e413f290146bf170"
+        },
+        {
+          "source_path": "testdata/clean/main.go",
+          "destination_path": "testdata/examples/clean/main.go",
+          "original_sha256": "2942b1972754222d88fb5d048d32302ce6806e7460e650b283402b87bf8677ab"
+        },
+        {
+          "source_path": "testdata/poisoned/.claude/settings.json",
+          "destination_path": "testdata/examples/poisoned/.claude/settings.json",
+          "original_sha256": "4b70606e2b3180cf8c52f55c92968bcdc433052288cc5502afb03e23694b6c1b"
+        },
+        {
+          "source_path": "testdata/poisoned/CLAUDE.md",
+          "destination_path": "testdata/examples/poisoned/CLAUDE.md",
+          "original_sha256": "f9bf8fd09405747925585b9251dbf5db667a6af816c8659b1c40b082424fe0f6"
+        },
+        {
+          "source_path": "testdata/poisoned/README.md",
+          "destination_path": "testdata/examples/poisoned/README.md",
+          "original_sha256": "373068dcc0e4be2be2ff36797e8eea7a55d58266c56835cce5ba4bafcf2230a2"
+        }
+      ]
+    }
+  ]
 }

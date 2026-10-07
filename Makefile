@@ -1,4 +1,4 @@
-.PHONY: test vet build train prepare compare regression report
+.PHONY: test vet build train prepare compare regression report confusables
 
 test:
 	go test ./...
@@ -7,7 +7,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -27,3 +27,7 @@ regression:
 
 report:
 	go run ./cmd/comparison report
+
+# Rebuild the runtime table into artifacts; never overwrite application sources.
+confusables:
+	go run ./cmd/gen-confusables

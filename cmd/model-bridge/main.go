@@ -141,6 +141,11 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			return fmt.Errorf("line %d: missing text", line)
 		}
 		res := response{TextSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(*r.Text))), Dim: model.Dim, FeatureSchema: model.FeatureSchema, ModelModule: version(), WeightsSHA256: hash}
+		if *backend == "onnx" {
+			res.Dim = 0
+			res.FeatureSchema = "onnx-input-ids-v1"
+			res.ModelModule = "external-onnx"
+		}
 		switch *mode {
 		case "features":
 			res.Features = model.Features(*r.Text)

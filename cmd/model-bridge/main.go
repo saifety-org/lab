@@ -23,6 +23,7 @@ type request struct {
 	Text *string `json:"text"`
 }
 type response struct {
+	Tokens        *int             `json:"tokens,omitempty"`
 	TextSHA256    string           `json:"text_sha256"`
 	Features      map[int]float64  `json:"features,omitempty"`
 	Score         *float64         `json:"score,omitempty"`
@@ -67,7 +68,7 @@ func loadWeights(path string) (*model.Model, string, error) {
 }
 func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("model-bridge", flag.ContinueOnError)
-	mode := fs.String("mode", "features", "features | score | scan")
+	mode := fs.String("mode", "features", "features | score | scan | tokens")
 	weights := fs.String("weights", "", "explicit native candidate JSON; empty uses shipped model")
 	backend := fs.String("backend", "native", "native | onnx (requires -tags onnx and explicit/cached artifacts)")
 	library := fs.String("library", "", "ONNX runtime library")
@@ -77,14 +78,14 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *mode != "features" && *mode != "score" && *mode != "scan" {
+	if *mode != "features" && *mode != "score" && *mode != "scan" && *mode != "tokens" {
 		return fmt.Errorf("unknown mode %q", *mode)
 	}
 	if *backend != "native" && *backend != "onnx" {
 		return fmt.Errorf("unknown backend %q", *backend)
 	}
-	if *backend == "onnx" && (*mode != "score" || *weights != "") {
-		return fmt.Errorf("ONNX is supported only in checked score mode, without native weights")
+	if *backend == "onnx" && ((*mode != "score" && *mode != "tokens") || *weights != "") {
+		return fmt.Errorf("ONNX is supported only in checked score/tokens modes, without native weights")
 	}
 	var scorer inference.Scorer
 	hash := inference.EmbeddedSHA256()
@@ -143,6 +144,16 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		switch *mode {
 		case "features":
 			res.Features = model.Features(*r.Text)
+		case "tokens":
+			c, ok := scorer.(interface{ TokenCount(string) (int, error) })
+			if !ok {
+				return fmt.Errorf("token counting requires ONNX")
+			}
+			n, err := c.TokenCount(*r.Text)
+			if err != nil {
+				return err
+			}
+			res.Tokens = &n
 		case "score":
 			var score float64
 			if c, ok := scorer.(interface {

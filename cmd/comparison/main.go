@@ -28,7 +28,7 @@ func readJSON(path string, v any) { b, err := os.ReadFile(path); must(err); must
 func readLines[T any](path string) []T {
 	f, err := os.Open(path)
 	must(err)
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 4096), 4<<20)
 	var rows []T
@@ -61,7 +61,7 @@ func main() {
 	}
 	flags := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
 	dir := flags.String("dir", "artifacts/comparison", "artifact directory")
-	flags.Parse(os.Args[2:])
+	must(flags.Parse(os.Args[2:]))
 	must(os.MkdirAll(filepath.Join(*dir, "raw"), 0755))
 	switch os.Args[1] {
 	case "prepare":

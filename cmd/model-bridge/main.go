@@ -23,15 +23,18 @@ type request struct {
 	Text *string `json:"text"`
 }
 type response struct {
-	Tokens        *int             `json:"tokens,omitempty"`
-	TextSHA256    string           `json:"text_sha256"`
-	Features      map[int]float64  `json:"features,omitempty"`
-	Score         *float64         `json:"score,omitempty"`
-	Verdict       *scanner.Verdict `json:"verdict,omitempty"`
-	Dim           int              `json:"dim"`
-	FeatureSchema string           `json:"feature_schema"`
-	ModelModule   string           `json:"model_module"`
-	WeightsSHA256 string           `json:"weights_sha256"`
+	Tokens          *int             `json:"tokens,omitempty"`
+	TextSHA256      string           `json:"text_sha256"`
+	Features        map[int]float64  `json:"features,omitempty"`
+	Score           *float64         `json:"score,omitempty"`
+	Verdict         *scanner.Verdict `json:"verdict,omitempty"`
+	Dim             int              `json:"dim"`
+	FeatureSchema   string           `json:"feature_schema"`
+	ModelModule     string           `json:"model_module"`
+	WeightsSHA256   string           `json:"weights_sha256"`
+	TokenizerSHA256 string           `json:"tokenizer_sha256,omitempty"`
+	RuntimeSHA256   string           `json:"runtime_sha256,omitempty"`
+	AttackIndex     *int             `json:"attack_index,omitempty"`
 }
 
 func version() string {
@@ -66,6 +69,18 @@ func loadWeights(path string) (*model.Model, string, error) {
 	}
 	return m, fmt.Sprintf("%x", sha256.Sum256(b)), nil
 }
+func fileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
 func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error {
 	fs := flag.NewFlagSet("model-bridge", flag.ContinueOnError)
 	mode := fs.String("mode", "features", "features | score | scan | tokens")
@@ -89,6 +104,8 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	}
 	var scorer inference.Scorer
 	hash := inference.EmbeddedSHA256()
+	var tokenizerHash, runtimeHash string
+	var resolvedAttackIndex *int
 	if *backend == "native" {
 		m, err := model.Default()
 		if err != nil {
@@ -115,11 +132,20 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		if cfg.InjectionIndex < 0 || cfg.InjectionIndex > 1 {
 			return fmt.Errorf("attack index must be 0 or 1")
 		}
-		b, err := os.ReadFile(cfg.ModelPath)
+		var err error
+		hash, err = fileHash(cfg.ModelPath)
 		if err != nil {
 			return err
 		}
-		hash = fmt.Sprintf("%x", sha256.Sum256(b))
+		tokenizerHash, err = fileHash(cfg.TokenizerPath)
+		if err != nil {
+			return err
+		}
+		runtimeHash, err = fileHash(cfg.LibraryPath)
+		if err != nil {
+			return err
+		}
+		resolvedAttackIndex = &cfg.InjectionIndex
 		scorer, err = inference.NewONNX(cfg)
 		if err != nil {
 			return err
@@ -145,6 +171,9 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			res.Dim = 0
 			res.FeatureSchema = "onnx-input-ids-v1"
 			res.ModelModule = "external-onnx"
+			res.TokenizerSHA256 = tokenizerHash
+			res.RuntimeSHA256 = runtimeHash
+			res.AttackIndex = resolvedAttackIndex
 		}
 		switch *mode {
 		case "features":

@@ -1,4 +1,4 @@
-.PHONY: test vet build train prepare compare regression report confusables
+.PHONY: test vet build train prepare compare regression report confusables missed-injections
 
 test:
 	go test ./...
@@ -7,7 +7,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -31,3 +31,7 @@ report:
 # Rebuild the runtime table into artifacts; never overwrite application sources.
 confusables:
 	go run ./cmd/gen-confusables
+
+# Diagnostic corpus of known misses; it is not an independent quality benchmark.
+missed-injections:
+	go run ./cmd/missed-injections

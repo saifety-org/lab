@@ -1,7 +1,7 @@
 package training
 
 import (
-	"github.com/saifety-org/sAIfety/pkg/inference"
+	inference "github.com/saifety-org/prompt-injection-model"
 	"math"
 	"math/rand"
 	"sort"

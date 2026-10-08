@@ -2,18 +2,23 @@
 
 Датасеты, обучение моделей и оценка качества
 [sAIfety](https://github.com/saifety-org/sAIfety). Все инструменты написаны на Go.
-Рабочее приложение, детекторы и production-веса находятся в основном репозитории.
+Приложение и детекторы находятся в основном репозитории; собственные
+production-веса, признаки и инференс — в
+[prompt-injection-model](https://github.com/saifety-org/prompt-injection-model).
 
 ## Запуск
 
 Нужен Go 1.26+. Для сравнения с DeBERTa также нужны C-компилятор и локальный
 ONNX bundle (`saifety model pull`). Зависимость от sAIfety закреплена в `go.mod`;
-используется его публичный API, а не копия инференса или детекторов.
+сканер и ONNX используются через его публичный API. Обучение собственной
+модели использует отдельный модуль `prompt-injection-model`; копий признаков
+и инференса в lab нет.
 
 ```sh
 make test
 make build
 make regression
+make missed-injections  # текущие вердикты для известных пропусков
 make train       # исторический режим обучения; отдельные веса в artifacts/
 make compare     # подготовка, обучение кандидата, общий тест, отчёт
 ```
@@ -35,6 +40,9 @@ make compare     # подготовка, обучение кандидата, о
 - `datasets/unicode/`, `cmd/gen-confusables/` — исходные данные Unicode и
   генератор рабочей таблицы; [воспроизведение](docs/unicode.md).
 - `testdata/examples/` — демонстрационные чистый и отравленный проекты.
+- `testdata/missed-injections/`, `cmd/missed-injections/` — синтетические
+  пропуски с задачей пользователя, недоверенным источником и повторяемым
+  отчётом; [примеры и наблюдения](docs/missed-injections.md).
 - `docs/history/` — исходная идея и исторический статус реализации.
 - `migration.json` — исходные коммиты, пути и хеши перенесённых файлов.
 

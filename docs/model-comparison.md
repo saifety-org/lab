@@ -23,8 +23,9 @@ make compare
 Подробные артефакты находятся в `artifacts/comparison/` (каталог исключён из git):
 
 - `weights.json` и `weights.json.meta.json`: новый кандидат, параметры обучения,
-  хеш обучающего набора и хеш весов. Рабочий `internal/classifier/weights.json` в основном репозитории
-  автоматически не заменяется; обычная сборка приложения использует его.
+  хеш обучающего набора и хеш весов. Рабочие веса в
+  [prompt-injection-model](https://github.com/saifety-org/prompt-injection-model)
+  автоматически не заменяются; приложение использует закреплённую версию модуля.
 - `train.jsonl`, `evaluation.jsonl`, `manifest.json`: точные выборки,
   разбиение, происхождение и контрольные суммы.
 - `predictions.jsonl`: оценки трёх моделей, токены и задержка каждого примера.

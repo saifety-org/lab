@@ -19,7 +19,8 @@ import (
 	"time"
 
 	"github.com/saifety-org/lab/internal/evaluation"
-	classifier "github.com/saifety-org/sAIfety/pkg/inference"
+	classifier "github.com/saifety-org/prompt-injection-model"
+	backend "github.com/saifety-org/sAIfety/pkg/inference"
 )
 
 type sample = evaluation.Sample
@@ -64,12 +65,12 @@ func main() {
 		panic("invalid classifier dimensions")
 	}
 	oursLoad := time.Since(loadStart).Seconds()
-	shipped, err := classifier.Default()
+	shipped, err := backend.Default()
 	must(err)
-	cfg, err := classifier.CachedONNXConfig()
+	cfg, err := backend.CachedONNXConfig()
 	must(err)
 	loadStart = time.Now()
-	c, err := classifier.NewONNX(cfg)
+	c, err := backend.NewONNX(cfg)
 	must(err)
 	debertaLoad := time.Since(loadStart).Seconds()
 	dc, ok := c.(checked)
@@ -152,7 +153,7 @@ func main() {
 		}
 	}
 	must(output.Sync())
-	meta := map[string]any{"go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "logical_cpus": runtime.NumCPU(), "data_sha256": hash(*data), "weights_sha256": hash(*weights), "shipped_weights_sha256": classifier.EmbeddedSHA256(), "deberta_sha256": hash(cfg.ModelPath), "tokenizer_sha256": hash(cfg.TokenizerPath), "runtime_sha256": hash(cfg.LibraryPath), "ours_load_seconds": oursLoad, "deberta_load_seconds": debertaLoad, "rows": len(rows), "excluded_long": excluded, "inference_errors": 0, "batch_size": 1, "warmup": 3, "max_shared_tokens": 512, "preprocessing": "identical raw text; model-native feature/tokenizer transforms; no rules or gating"}
+	meta := map[string]any{"go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "logical_cpus": runtime.NumCPU(), "data_sha256": hash(*data), "weights_sha256": hash(*weights), "shipped_weights_sha256": backend.EmbeddedSHA256(), "deberta_sha256": hash(cfg.ModelPath), "tokenizer_sha256": hash(cfg.TokenizerPath), "runtime_sha256": hash(cfg.LibraryPath), "ours_load_seconds": oursLoad, "deberta_load_seconds": debertaLoad, "rows": len(rows), "excluded_long": excluded, "inference_errors": 0, "batch_size": 1, "warmup": 3, "max_shared_tokens": 512, "preprocessing": "identical raw text; model-native feature/tokenizer transforms; no rules or gating"}
 	meta["training"] = trainingMeta
 	if build, ok := debug.ReadBuildInfo(); ok {
 		meta["build"] = build

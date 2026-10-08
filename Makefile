@@ -7,7 +7,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1

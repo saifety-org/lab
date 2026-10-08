@@ -1,7 +1,8 @@
 # sAIfety lab
 
 Датасеты, обучение моделей и оценка качества
-[sAIfety](https://github.com/saifety-org/sAIfety). Все инструменты написаны на Go.
+[sAIfety](https://github.com/saifety-org/sAIfety). Инструменты этого репозитория написаны на Go; обучение и Python-эксперименты
+развиваются в [lab-py](https://github.com/saifety-org/lab-py).
 Приложение и детекторы находятся в основном репозитории; собственные
 production-веса, признаки и инференс — в
 [prompt-injection-model](https://github.com/saifety-org/prompt-injection-model).
@@ -77,3 +78,14 @@ make test
 `go.work` не публикуется. Для проверки закреплённой зависимости используйте
 `GOWORK=off make test`. Обновление зависимости в `go.mod` позволяет явно
 выбрать версию продукта для следующего эксперимента.
+
+## Python-лаборатория
+
+`lab-py` использует закреплённые данные из этого репозитория. `cmd/model-bridge`
+передаёт признаки, оценки модели и вердикты настоящего Go-сканера через JSONL;
+копий алгоритмов в Python нет. Вход — `{ "text": "..." }` на строку, режимы
+`-mode features|score|scan`. Признаки берутся из закреплённого
+`prompt-injection-model`; кандидаты загружаются через `-weights`.
+Для ONNX используется `-backend onnx` и сборка `-tags onnx`; ошибки инференса
+и превышение окна в режиме score завершают эксперимент, без fallback.
+Датасеты и разбиение остаются здесь; Python-обучение и экспорт — в `lab-py`.

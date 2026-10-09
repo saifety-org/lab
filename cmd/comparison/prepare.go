@@ -99,11 +99,11 @@ func prepare(dir string) {
 			resp, e := client.Get(url)
 			must(e)
 			if resp.StatusCode != 200 {
-				resp.Body.Close()
+				_ = resp.Body.Close() // Cleanup after read or failure.
 				panic(fmt.Sprintf("%s: HTTP %d", name, resp.StatusCode))
 			}
 			b, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-			resp.Body.Close()
+			_ = resp.Body.Close() // Cleanup after read or failure.
 			must(err)
 			must(os.WriteFile(path, b, 0644))
 		} else {

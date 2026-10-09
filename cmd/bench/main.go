@@ -38,7 +38,7 @@ func must(err error) {
 func hash(path string) string {
 	f, err := os.Open(path)
 	must(err)
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	h := sha256.New()
 	_, err = io.Copy(h, f)
 	must(err)
@@ -79,7 +79,7 @@ func main() {
 	}
 	f, err := os.Open(*data)
 	must(err)
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 4096), 4<<20)
 	var rows []sample
@@ -106,7 +106,7 @@ func main() {
 	}
 	output, err := os.Create(*out)
 	must(err)
-	defer output.Close()
+	defer func() { must(output.Close()) }()
 	enc := json.NewEncoder(output)
 	excluded := 0
 	for i, row := range rows {

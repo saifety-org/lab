@@ -15,7 +15,7 @@ func LoadCorpus(path string) []Sample {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	var out []Sample
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<20)
@@ -43,7 +43,7 @@ func LoadCorpusStrict(path string) ([]Sample, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 4096), 4<<20)
 	var out []Sample

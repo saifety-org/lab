@@ -1,7 +1,8 @@
 # sAIfety lab
 
 Датасеты, обучение моделей и оценка качества
-[sAIfety](https://github.com/saifety-org/sAIfety). Все инструменты написаны на Go.
+[sAIfety](https://github.com/saifety-org/sAIfety). Инструменты этого репозитория написаны на Go; обучение и Python-эксперименты
+развиваются в [lab-py](https://github.com/saifety-org/lab-py).
 Приложение и детекторы находятся в основном репозитории; собственные
 production-веса, признаки и инференс — в
 [prompt-injection-model](https://github.com/saifety-org/prompt-injection-model).
@@ -77,3 +78,43 @@ make test
 `go.work` не публикуется. Для проверки закреплённой зависимости используйте
 `GOWORK=off make test`. Обновление зависимости в `go.mod` позволяет явно
 выбрать версию продукта для следующего эксперимента.
+
+## Python-лаборатория
+
+`lab-py` использует закреплённые данные из этого репозитория. `cmd/model-bridge`
+передаёт признаки, оценки модели и вердикты настоящего Go-сканера через JSONL;
+копий алгоритмов в Python нет. Вход — `{ "text": "..." }` на строку, режимы
+`-mode features|score|scan|tokens`. Признаки берутся из закреплённого
+`prompt-injection-model`; кандидаты загружаются через `-weights`.
+Для ONNX используется `-backend onnx` и сборка `-tags onnx`; ошибки инференса
+и превышение окна в режиме score завершают эксперимент, без fallback.
+Датасеты и разбиение остаются здесь; Python-обучение и экспорт — в `lab-py`.
+
+## CI checks
+
+Pull requests and pushes to `main` run three required checks: `lint`, `test`,
+`build`. Reproduce them from this repository with Go from `go.mod` and a C
+compiler for the ONNX build where applicable:
+
+```sh
+make lint-install          # golangci-lint v2.14.0; installs only into ./bin
+make lint                 # gofmt (read-only), go vet, configured Go linters
+make ci-test              # unit/regression tests with race detector
+make ci-build             # all supported build variants
+```
+
+`GOWORK=off` and `-mod=readonly` prevent local workspace overrides or implicit
+module edits. Actions are pinned by commit; the linter version is pinned in
+both CI and Makefile. Checks have timeouts and newer runs cancel stale runs
+on the same PR. CI does not download inference models, train candidates or
+run full benchmarks. ONNX integration tests requiring cached assets skip
+when those assets are absent; tagged code still compiles and is linted.
+
+The linter uses the standard checks (`errcheck`, `govet`, `ineffassign`,
+`staticcheck`, `unused`) without automatic fixes. Any exclusions are narrow
+rules with reasons in `.golangci.yml`. Cleanup failures already superseded by
+an operation error, read-side closes and test teardown are explicitly ignored
+at the call site; file writes and the final write-side close remain checked.
+
+The build check compiles every Go package/command and the ONNX benchmark,
+without executing that benchmark or downloading its runtime/model assets.

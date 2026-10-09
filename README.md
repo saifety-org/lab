@@ -118,3 +118,10 @@ at the call site; file writes and the final write-side close remain checked.
 
 The build check compiles every Go package/command and the ONNX benchmark,
 without executing that benchmark or downloading its runtime/model assets.
+
+## Контекстные данные
+
+[Корпус v1](datasets/contextual/v1/README.md): 7 типов, задачи пользователя и
+недоверенные документы, EN/RU/ES/ZH, безопасные пары и изолированные семейства.
+Проверка: `make validate-context`; подготовка: `make prepare-context`.
+Это синтетический seed-корпус с обязательной последующей проверкой человеком.

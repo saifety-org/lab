@@ -26,7 +26,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -61,3 +61,10 @@ ci-test:
 ci-build: build
 	go build ./...
 	go build -tags onnx -o bin/bench ./cmd/bench
+
+.PHONY: validate-context prepare-context
+validate-context:
+	go run ./cmd/context-corpus
+
+prepare-context:
+	go run ./cmd/context-corpus -out artifacts/contextual

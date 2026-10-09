@@ -21,7 +21,7 @@ func get(client *http.Client, address string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // Best-effort cleanup.
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: HTTP %d", address, resp.StatusCode)
 	}
@@ -44,8 +44,8 @@ func fetch(out string, client *http.Client) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
-	defer f.Close()
+	defer func() { _ = os.Remove(f.Name()) }() // Best-effort cleanup.
+	defer func() { _ = f.Close() }()           // Best-effort cleanup.
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
 	counts := [2]int{}

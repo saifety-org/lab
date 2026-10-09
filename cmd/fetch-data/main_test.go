@@ -32,7 +32,7 @@ func TestFetchPreservesMultilineSamplesAndLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Best-effort cleanup.
 	scan := bufio.NewScanner(f)
 	var count, attacks, multiline int
 	for scan.Scan() {

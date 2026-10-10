@@ -121,11 +121,14 @@ without executing that benchmark or downloading its runtime/model assets.
 
 ## Контекстные данные
 
-[Корпус v1](datasets/contextual/v1/README.md): 7 типов, задачи пользователя и
+[Корпус v2](datasets/contextual/v2/README.md): 7 типов, задачи пользователя и
 недоверенные документы, EN/RU/ES/ZH, безопасные пары и изолированные семейства.
 Проверка: `make validate-context`; подготовка: `make prepare-context`.
-Это синтетический seed-корпус с обязательной последующей проверкой человеком.
+Это синтетический seed-корпус после явно обозначенного модельного ревью.
+Семейства исправлены, спорные примеры изолированы в development. Ручная разметка
+от пользователя не требуется; ограничения проверки записаны в журнале.
 
 `make review-context` готовит слепой HTML/JSON пакет и шаблон решений.
 Приёмка заполненного журнала: `go run ./cmd/context-corpus -reviews <file> -require-reviewed`.
-Протокол и ограничения: [независимое ревью](docs/contextual-review.md).
+Результаты и ограничения: [модельное ревью](docs/model-corpus-review.md).
+Исторический [v1](datasets/contextual/v1/README.md) сохранён для воспроизведения прежних отчётов.

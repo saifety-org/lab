@@ -17,12 +17,12 @@ func run(args []string) error {
 
 func execute(args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("context-corpus", flag.ContinueOnError)
-	dir := flags.String("source", "datasets/contextual/v1", "corpus directory")
+	dir := flags.String("source", "datasets/contextual/v2", "corpus directory")
 	out := flags.String("out", "", "optional prepared artifact directory")
 	reviewOut := flags.String("review-out", "", "new directory for blinded human review packet")
 	reviewKey := flags.String("review-key-out", "", "new unblinded answer key file for post-blind reconciliation; keep separate from reviewers")
 	reviews := flags.String("reviews", "", "human review ledger to validate")
-	requireReviewed := flags.Bool("require-reviewed", false, "fail unless independent human review is complete (requires -reviews)")
+	requireReviewed := flags.Bool("require-reviewed", false, "fail unless declared human/model review is complete (requires -reviews)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func execute(args []string, output io.Writer) error {
 			return err
 		}
 		if *requireReviewed && result.Status != "complete" {
-			return fmt.Errorf("independent human review incomplete (%d issues)", len(result.Issues))
+			return fmt.Errorf("review incomplete (%d issues)", len(result.Issues))
 		}
 		return nil
 	}

@@ -62,9 +62,15 @@ ci-build: build
 	go build ./...
 	go build -tags onnx -o bin/bench ./cmd/bench
 
-.PHONY: validate-context prepare-context
+.PHONY: validate-context prepare-context review-context
 validate-context:
 	go run ./cmd/context-corpus
 
 prepare-context:
 	go run ./cmd/context-corpus -out artifacts/contextual
+
+# A fresh directory prevents overwriting human annotations from earlier runs.
+REVIEW_OUT ?= artifacts/context-review-v1
+review-context:
+	mkdir -p artifacts
+	go run ./cmd/context-corpus -review-out $(REVIEW_OUT)

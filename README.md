@@ -125,3 +125,7 @@ without executing that benchmark or downloading its runtime/model assets.
 недоверенные документы, EN/RU/ES/ZH, безопасные пары и изолированные семейства.
 Проверка: `make validate-context`; подготовка: `make prepare-context`.
 Это синтетический seed-корпус с обязательной последующей проверкой человеком.
+
+`make review-context` готовит слепой HTML/JSON пакет и шаблон решений.
+Приёмка заполненного журнала: `go run ./cmd/context-corpus -reviews <file> -require-reviewed`.
+Протокол и ограничения: [независимое ревью](docs/contextual-review.md).

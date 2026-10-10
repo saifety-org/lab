@@ -87,8 +87,9 @@ type Sample struct {
 	Tags        []string `json:"tags"`
 }
 type Corpus struct {
-	Rows    []Record
-	Sources map[string]string
+	Rows     []Record
+	Sources  map[string]string
+	Taxonomy Taxonomy
 }
 
 func strict(b []byte, dst any) error {
@@ -146,6 +147,7 @@ func Load(dir string) (*Corpus, error) {
 	if taxonomy.Version != 1 || len(taxonomy.Types) == 0 {
 		return nil, fmt.Errorf("invalid taxonomy")
 	}
+	c.Taxonomy = taxonomy
 	types := map[string]bool{}
 	for _, t := range taxonomy.Types {
 		if !slug.MatchString(t.ID) || types[t.ID] || t.Definition == "" || t.Boundary == "" {
@@ -266,14 +268,7 @@ func grams(s string) map[string]bool {
 	return m
 }
 func near(a, b string) bool {
-	x, y := grams(a), grams(b)
-	intersection := 0
-	for k := range x {
-		if y[k] {
-			intersection++
-		}
-	}
-	return float64(intersection)/float64(len(x)+len(y)-intersection) >= .8
+	return jaccard(grams(a), grams(b)) >= .8
 }
 func (c *Corpus) Manifest() map[string]any {
 	counts := map[string]int{}

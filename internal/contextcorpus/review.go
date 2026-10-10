@@ -54,6 +54,7 @@ type RowJudgment struct {
 	ExpectedBehavior string `json:"expected_behavior"`
 	Translation      string `json:"translation"`
 	Notes            string `json:"notes"`
+	Disposition      string `json:"disposition,omitempty"`
 }
 type GroupJudgment struct {
 	Family string `json:"family"`
@@ -80,6 +81,10 @@ type ReviewLedger struct {
 	Rows                []RowJudgment   `json:"rows"`
 	Groups              []GroupJudgment `json:"groups"`
 	Pairs               []PairJudgment  `json:"cross_family_candidates"`
+	Method              string          `json:"method,omitempty"`
+	Model               string          `json:"model,omitempty"`
+	Protocol            string          `json:"protocol,omitempty"`
+	Limitations         string          `json:"limitations,omitempty"`
 }
 type ReviewResult struct {
 	Contract     string   `json:"contract"`
@@ -88,6 +93,8 @@ type ReviewResult struct {
 	ReviewedRows int      `json:"reviewed_rows"`
 	TotalRows    int      `json:"total_rows"`
 	Issues       []string `json:"issues"`
+	Method       string   `json:"review_method"`
+	Quarantined  int      `json:"quarantined_rows"`
 }
 
 func reviewID(prefix string, v any) string {
@@ -113,8 +120,13 @@ func (c *Corpus) BuildReview() (ReviewPacket, ReviewLedger) {
 	}
 	docs := []doc{}
 	families := map[string]bool{}
+	quarantined := map[string]bool{}
 	for _, r := range c.Rows {
 		id, family := reviewID("r-", r), reviewID("f-", r.Family)
+		if r.Provenance.Review == "model-reviewed" || r.Provenance.Review == "model-review-quarantined" {
+			l.Method = "model"
+		}
+		quarantined[id] = r.Provenance.Review == "model-review-quarantined"
 		item := ReviewItem{id, family, r.Language, r.Task, []ReviewDocument{}}
 		for _, d := range r.Documents {
 			item.Documents = append(item.Documents, ReviewDocument{d.ID, d.Kind, d.Trust, d.Language, d.Text})
@@ -134,7 +146,11 @@ func (c *Corpus) BuildReview() (ReviewPacket, ReviewLedger) {
 		return a.ID < b.ID
 	})
 	for _, item := range p.Items {
-		l.Rows = append(l.Rows, RowJudgment{ID: item.ID, Authorization: "pending", TrustBoundaries: "pending", Translation: "pending"})
+		j := RowJudgment{ID: item.ID, Authorization: "pending", TrustBoundaries: "pending", Translation: "pending"}
+		if quarantined[item.ID] {
+			j.Disposition = "quarantined"
+		}
+		l.Rows = append(l.Rows, j)
 	}
 	for f := range families {
 		l.Groups = append(l.Groups, GroupJudgment{f, "pending", ""})
@@ -188,12 +204,31 @@ func jaccard(x, y map[string]bool) float64 {
 // CheckReview never updates labels or promotes the corpus. Disagreement requires
 // explicit adjudication, a versioned data change and a newly bound review.
 func (c *Corpus) CheckReview(p ReviewPacket, l ReviewLedger) (ReviewResult, error) {
-	result := ReviewResult{ReviewContract, p.CorpusSHA256, "pending", 0, len(p.Items), []string{}}
+	method := l.Method
+	if method == "" {
+		method = "human"
+	} // Original human-ledger format remains valid.
+	result := ReviewResult{Contract: ReviewContract, CorpusSHA256: p.CorpusSHA256, Status: "pending", TotalRows: len(p.Items), Issues: []string{}, Method: method}
 	if l.Contract != ReviewContract || l.CorpusSHA256 != p.CorpusSHA256 {
 		return result, fmt.Errorf("review contract or corpus SHA256 mismatch; regenerate packet after corpus changes")
 	}
-	if strings.TrimSpace(l.Reviewer) == "" || !l.Human || !l.Independent {
-		result.Issues = append(result.Issues, "independent human reviewer attestation is missing")
+	if strings.TrimSpace(l.Reviewer) == "" {
+		result.Issues = append(result.Issues, "reviewer is missing")
+	}
+	switch method {
+	case "human":
+		if !l.Human || !l.Independent {
+			result.Issues = append(result.Issues, "independent human reviewer attestation is missing")
+		}
+	case "model":
+		if l.Human || l.Independent {
+			return result, fmt.Errorf("model review cannot claim independent human attestation")
+		}
+		if strings.TrimSpace(l.Model) == "" || strings.TrimSpace(l.Protocol) == "" || strings.TrimSpace(l.Limitations) == "" {
+			result.Issues = append(result.Issues, "model, protocol and limitations are required for model review")
+		}
+	default:
+		return result, fmt.Errorf("unsupported review method %q", method)
 	}
 	if _, err := time.Parse(time.RFC3339, l.ReviewedAt); err != nil {
 		result.Issues = append(result.Issues, "reviewed_at must be RFC3339")
@@ -221,15 +256,28 @@ func (c *Corpus) CheckReview(p ReviewPacket, l ReviewLedger) (ReviewResult, erro
 		if !reviewState(j.Authorization) || !reviewState(j.TrustBoundaries) || !reviewState(j.Translation) {
 			return result, fmt.Errorf("invalid review state for %s", j.ID)
 		}
-		if j.Label == nil || j.PrimaryType == "" || j.Authorization != "pass" || j.TrustBoundaries != "pass" || j.Translation != "pass" || strings.TrimSpace(j.ExpectedBehavior) == "" || strings.TrimSpace(j.Notes) == "" {
+		if j.Disposition != "" && j.Disposition != "accepted" && j.Disposition != "quarantined" {
+			return result, fmt.Errorf("invalid review disposition for %s", j.ID)
+		}
+		quarantined := j.Disposition == "quarantined"
+		if quarantined && (r.Split != "development" || r.Provenance.Review != "model-review-quarantined" || method != "model") {
+			return result, fmt.Errorf("quarantine requires model review and explicit development-only provenance: %s", j.ID)
+		}
+		if r.Provenance.Review == "model-review-quarantined" && !quarantined {
+			return result, fmt.Errorf("quarantined source cannot receive an accepted judgment: %s", j.ID)
+		}
+		if (j.Label == nil && !quarantined) || j.PrimaryType == "" || j.Authorization != "pass" || j.TrustBoundaries != "pass" || j.Translation != "pass" || strings.TrimSpace(j.ExpectedBehavior) == "" || strings.TrimSpace(j.Notes) == "" {
 			result.Issues = append(result.Issues, j.ID+": incomplete or failed judgment")
 			continue
 		}
-		if *j.Label != *r.Label || j.PrimaryType != r.PrimaryType {
+		if (j.Label != nil && *j.Label != *r.Label) || j.PrimaryType != r.PrimaryType {
 			result.Issues = append(result.Issues, j.ID+": label/type disagreement requires adjudication")
 			continue
 		}
 		result.ReviewedRows++
+		if quarantined {
+			result.Quarantined++
+		}
 	}
 	for id := range rows {
 		if !seen[id] {

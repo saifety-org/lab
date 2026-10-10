@@ -85,6 +85,7 @@ type Sample struct {
 	PayloadText string   `json:"payload_text"`
 	Documents   []string `json:"documents"`
 	Tags        []string `json:"tags"`
+	Review      string   `json:"review,omitempty"`
 }
 type Corpus struct {
 	Rows     []Record
@@ -131,7 +132,11 @@ func Render(r Record) (Sample, error) {
 	if err != nil {
 		return Sample{}, err
 	}
-	return Sample{r.ID, r.Family, r.Split, r.PrimaryType, r.Language, *r.Label, string(b), strings.Join(texts, "\n\n"), texts, r.Tags}, nil
+	review := ""
+	if r.Provenance.Review != "author-reviewed-human-review-pending" {
+		review = r.Provenance.Review
+	}
+	return Sample{r.ID, r.Family, r.Split, r.PrimaryType, r.Language, *r.Label, string(b), strings.Join(texts, "\n\n"), texts, r.Tags, review}, nil
 }
 func Load(dir string) (*Corpus, error) {
 	c := &Corpus{Sources: map[string]string{}}
@@ -204,8 +209,11 @@ func Validate(rows []Record, types map[string]bool) error {
 			return fmt.Errorf("family crosses splits: %s", r.Family)
 		}
 		families[r.Family] = r.Split
-		if r.Provenance.OriginID == "" || r.Provenance.License == "" || r.Provenance.Review != "author-reviewed-human-review-pending" || r.Provenance.Origin != "synthetic" {
+		if r.Provenance.OriginID == "" || r.Provenance.License == "" || !validSourceReview(r.Provenance.Review) || r.Provenance.Origin != "synthetic" {
 			return fmt.Errorf("%s: missing/unsupported provenance", r.ID)
+		}
+		if r.Provenance.Review == "model-review-quarantined" && r.Split != "development" {
+			return fmt.Errorf("%s: quarantined example outside development", r.ID)
 		}
 		if old, ok := origins[r.Provenance.OriginID]; ok && old != r.Family {
 			return fmt.Errorf("one origin must stay in one family")
@@ -235,25 +243,30 @@ func Validate(rows []Record, types map[string]bool) error {
 	}
 	// All language derivatives are explicitly grouped. This lexical check catches
 	// undeclared exact/near-copy leakage; it cannot discover semantic translations.
+	// Cache normalization and grams once per row; repeated corpus checks in CI
+	// otherwise rebuild them for every pair, particularly expensive under -race.
+	texts := make([]string, len(rows))
+	payloads := make([]map[string]bool, len(rows))
 	for i, a := range rows {
 		sa, err := Render(a)
 		if err != nil {
 			return err
 		}
-		for _, b := range rows[:i] {
-			sb, err := Render(b)
-			if err != nil {
-				return err
-			}
-			if canonical(sa.Text) == canonical(sb.Text) {
+		texts[i] = canonical(sa.Text)
+		payloads[i] = grams(sa.PayloadText)
+		for j, b := range rows[:i] {
+			if texts[i] == texts[j] {
 				return fmt.Errorf("duplicate context: %s/%s", a.ID, b.ID)
 			}
-			if a.Family != b.Family && near(sa.PayloadText, sb.PayloadText) {
+			if a.Family != b.Family && jaccard(payloads[i], payloads[j]) >= .8 {
 				return fmt.Errorf("near-copy must share family: %s/%s", a.ID, b.ID)
 			}
 		}
 	}
 	return nil
+}
+func validSourceReview(s string) bool {
+	return s == "author-reviewed-human-review-pending" || s == "model-reviewed" || s == "model-review-quarantined"
 }
 func grams(s string) map[string]bool {
 	r := []rune(canonical(s))
@@ -267,9 +280,6 @@ func grams(s string) map[string]bool {
 	}
 	return m
 }
-func near(a, b string) bool {
-	return jaccard(grams(a), grams(b)) >= .8
-}
 func (c *Corpus) Manifest() map[string]any {
 	counts := map[string]int{}
 	families := map[string]bool{}
@@ -277,7 +287,17 @@ func (c *Corpus) Manifest() map[string]any {
 		counts[r.Split+"/"+r.PrimaryType+"/"+r.Language+fmt.Sprintf("/%d", *r.Label)]++
 		families[r.Family] = true
 	}
-	return map[string]any{"schema": 1, "contract": Contract, "rows": len(c.Rows), "families": len(families), "counts": counts, "source_sha256": c.Sources, "split_policy": "author-assigned scenario families before translations/paired controls; no random row split", "seed": 0, "near_duplicate_policy": "NFKC/casefold/whitespace character 5-gram Jaccard >= 0.8 requires shared family", "review_status": "human review pending; synthetic development corpus, not independent protection benchmark", "license": "NOASSERTION; no external data imported"}
+	m := map[string]any{"schema": 1, "contract": Contract, "rows": len(c.Rows), "families": len(families), "counts": counts, "source_sha256": c.Sources, "split_policy": "author-assigned scenario families before translations/paired controls; no random row split", "seed": 0, "near_duplicate_policy": "NFKC/casefold/whitespace character 5-gram Jaccard >= 0.8 requires shared family", "review_status": "human review pending; synthetic development corpus, not independent protection benchmark", "license": "NOASSERTION; no external data imported"}
+	reviews := map[string]int{}
+	for _, r := range c.Rows {
+		reviews[r.Provenance.Review]++
+	}
+	if reviews["model-reviewed"]+reviews["model-review-quarantined"] > 0 {
+		m["review_status"] = "model review recorded in review.json; not independent human review or an independent benchmark"
+		m["review_counts"] = reviews
+		m["split_policy"] = "versioned family corrections in REVIEW.md; known-miss derivatives and quarantined families stay in development; no random row split"
+	}
+	return m
 }
 func write(path string, data []byte) error { return os.WriteFile(path, append(data, '\n'), 0644) }
 func Prepare(c *Corpus, out string) error {

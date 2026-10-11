@@ -1,4 +1,9 @@
 {
+  "execution": {
+    "go_version": "go1.26.4",
+    "goarch": "arm64",
+    "goos": "darwin"
+  },
   "feature_schema": "hashed-char-ngram-v1",
   "limitations": "Diagnostic for task-only leakage; no new encoder fit/test comparison, no guarantee against document/style shortcuts. Dependent translations and provenance variants; no row-wise confidence intervals.",
   "metrics": {

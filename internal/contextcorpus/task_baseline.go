@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/saifety-org/lab/internal/evaluation"
 	"github.com/saifety-org/lab/internal/training"
@@ -68,7 +69,8 @@ func (c *Corpus) WriteTaskBaseline(out string) error {
 		metrics[split] = measures
 	}
 	report := map[string]any{"schema": 1, "model": "native logistic regression on task text only", "feature_schema": "hashed-char-ngram-v1",
-		"options": opts, "train_input_sha256": hash(consumed), "weights_sha256": hash(weights), "source_sha256": c.Sources,
+		"execution": map[string]string{"go_version": runtime.Version(), "goos": runtime.GOOS, "goarch": runtime.GOARCH},
+		"options":   opts, "train_input_sha256": hash(consumed), "weights_sha256": hash(weights), "source_sha256": c.Sources,
 		"metrics": metrics, "test_scored": false, "production_ready": false,
 		"limitations": "Diagnostic for task-only leakage; no new encoder fit/test comparison, no guarantee against document/style shortcuts. Dependent translations and provenance variants; no row-wise confidence intervals."}
 	b, err := json.MarshalIndent(report, "", "  ")

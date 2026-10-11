@@ -149,3 +149,9 @@ lock на принятый commit lab. [V3](datasets/contextual/v3/README.md) и
 Результаты и ограничения: [модельное ревью](docs/model-corpus-review.md).
 Исторические [v1](datasets/contextual/v1/README.md) и
 [v2](datasets/contextual/v2/README.md) сохранены для воспроизведения прежних отчётов.
+
+## Contextual ONNX research
+
+[Contextual ONNX bridge](docs/contextual-onnx.md) provides checked, resident Go
+inference and exact token IDs for the versioned E5 research bundle. It does
+not replace the application classifier.

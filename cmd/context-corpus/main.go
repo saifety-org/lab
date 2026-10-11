@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/saifety-org/lab/internal/contextcorpus"
 )
@@ -17,19 +18,30 @@ func run(args []string) error {
 
 func execute(args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("context-corpus", flag.ContinueOnError)
-	dir := flags.String("source", "datasets/contextual/v2", "corpus directory")
+	dir := flags.String("source", "datasets/contextual/v3", "corpus directory")
 	out := flags.String("out", "", "optional prepared artifact directory")
 	reviewOut := flags.String("review-out", "", "new directory for blinded human review packet")
 	reviewKey := flags.String("review-key-out", "", "new unblinded answer key file for post-blind reconciliation; keep separate from reviewers")
-	reviews := flags.String("reviews", "", "human review ledger to validate")
+	reviews := flags.String("reviews", "", "human/model review ledger to validate")
 	requireReviewed := flags.Bool("require-reviewed", false, "fail unless declared human/model review is complete (requires -reviews)")
+	freeze := flags.String("freeze", "", "verify committed holdout lock before preparing data")
+	freezeOut := flags.String("freeze-out", "", "create a new holdout lock; refuses overwrite")
+	history := flags.String("history", "", "historical corpus required for holdout verification")
+	catalog := flags.String("catalog", "", "reviewed scenario catalog required for holdout verification")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if *reviewKey != "" && (*reviewOut != "" || *reviews != "" || *out != "" || *requireReviewed) {
+	locked := *freeze != "" || *freezeOut != ""
+	if locked && (*reviews == "" || *history == "" || *catalog == "" || *reviewOut != "" || (*freeze != "" && *freezeOut != "")) {
+		return fmt.Errorf("freeze requires -reviews, -history and -catalog; incompatible with review generation or another freeze operation")
+	}
+	if !locked && (*history != "" || *catalog != "") {
+		return fmt.Errorf("-history and -catalog require a freeze operation")
+	}
+	if *reviewKey != "" && (*reviewOut != "" || *reviews != "" || *out != "" || *requireReviewed || locked) {
 		return fmt.Errorf("answer key generation must be a separate operation")
 	}
 	if *requireReviewed && *reviews == "" {
@@ -38,7 +50,7 @@ func execute(args []string, output io.Writer) error {
 	if *reviewOut != "" && *reviews != "" {
 		return fmt.Errorf("packet generation and review validation are separate operations")
 	}
-	if *out != "" && (*reviewOut != "" || *reviews != "") {
+	if *out != "" && (*reviewOut != "" || (*reviews != "" && !locked)) {
 		return fmt.Errorf("preparation and review are separate operations")
 	}
 	c, err := contextcorpus.Load(*dir)
@@ -47,11 +59,6 @@ func execute(args []string, output io.Writer) error {
 	}
 	if *reviewKey != "" {
 		return c.WriteReviewKey(*reviewKey)
-	}
-	if *out != "" {
-		if err = contextcorpus.Prepare(c, *out); err != nil {
-			return err
-		}
 	}
 	if *reviewOut != "" || *reviews != "" {
 		p, l := c.BuildReview()
@@ -70,13 +77,50 @@ func execute(args []string, output io.Writer) error {
 				return err
 			}
 		}
-		if err = json.NewEncoder(output).Encode(result); err != nil {
-			return err
-		}
-		if *requireReviewed && result.Status != "complete" {
+		if (*requireReviewed || locked) && result.Status != "complete" {
+			if err = json.NewEncoder(output).Encode(result); err != nil {
+				return err
+			}
 			return fmt.Errorf("review incomplete (%d issues)", len(result.Issues))
 		}
-		return nil
+		if locked {
+			h, e := contextcorpus.Load(*history)
+			if e != nil {
+				return e
+			}
+			b, e := os.ReadFile(*catalog)
+			if e != nil {
+				return e
+			}
+			if *freeze != "" {
+				f, e := contextcorpus.LoadFreeze(*freeze)
+				if e != nil {
+					return e
+				}
+				if e = contextcorpus.CheckFreeze(c, h, l, b, f); e != nil {
+					return e
+				}
+			} else {
+				f, e := contextcorpus.NewFreeze(c, h, l, b, time.Now().UTC().Format(time.RFC3339))
+				if e != nil {
+					return e
+				}
+				if e = contextcorpus.WriteFreeze(*freezeOut, f); e != nil {
+					return e
+				}
+			}
+		}
+		if *out != "" {
+			if err = contextcorpus.Prepare(c, *out); err != nil {
+				return err
+			}
+		}
+		return json.NewEncoder(output).Encode(result)
+	}
+	if *out != "" {
+		if err = contextcorpus.Prepare(c, *out); err != nil {
+			return err
+		}
 	}
 	return json.NewEncoder(output).Encode(c.Manifest())
 }

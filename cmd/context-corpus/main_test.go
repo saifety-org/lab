@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -35,6 +36,29 @@ func TestReviewCommandDoesNotCertifyTemplate(t *testing.T) {
 	}
 }
 
+func TestChangedHoldoutDoesNotWritePreparedData(t *testing.T) {
+	source := "../../datasets/contextual/v3"
+	f, err := contextcorpus.LoadFreeze(filepath.Join(source, "holdout.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.TestSHA256 = "changed-test"
+	tmp := t.TempDir()
+	lock := filepath.Join(tmp, "bad-lock.json")
+	if err = contextcorpus.WriteFreeze(lock, f); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "prepared")
+	err = execute([]string{"-source", source, "-reviews", filepath.Join(source, "review.json"),
+		"-freeze", lock, "-history", "../../datasets/contextual/v2", "-catalog", filepath.Join(source, "scenarios.json"), "-out", out}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("changed test accepted")
+	}
+	if _, err = os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("preparation wrote output before verifying lock: %v", err)
+	}
+}
+
 func TestReviewFlagErrors(t *testing.T) {
 	for _, args := range [][]string{
 		{"-require-reviewed"},
@@ -43,6 +67,11 @@ func TestReviewFlagErrors(t *testing.T) {
 		{"-review-out", "review", "-review-key-out", "key"},
 		{"-review-key-out", "key", "-require-reviewed"},
 		{"unexpected"},
+		{"-freeze", "lock.json"},
+		{"-freeze-out", "lock.json", "-reviews", "review.json"},
+		{"-history", "old"},
+		{"-catalog", "scenarios.json"},
+		{"-freeze", "a", "-freeze-out", "b", "-reviews", "r", "-history", "h", "-catalog", "c"},
 	} {
 		if err := execute(args, &bytes.Buffer{}); err == nil {
 			t.Fatalf("invalid flags accepted: %v", args)

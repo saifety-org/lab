@@ -26,7 +26,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus ./cmd/context-expand
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus ./cmd/context-expand ./cmd/context-onnx-bridge
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -59,6 +59,7 @@ ci-test:
 	go test -race -count=1 -timeout=5m ./...
 
 ci-build: build
+	go build -tags onnx -o bin/context-onnx-bridge ./cmd/context-onnx-bridge
 	go build ./...
 	go build -tags onnx -o bin/bench ./cmd/bench
 

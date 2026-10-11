@@ -26,7 +26,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus ./cmd/context-expand
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -62,12 +62,20 @@ ci-build: build
 	go build ./...
 	go build -tags onnx -o bin/bench ./cmd/bench
 
-.PHONY: validate-context prepare-context review-context
+.PHONY: validate-context prepare-context review-context reproduce-context
+CONTEXT_SOURCE := datasets/contextual/v3
+CONTEXT_GATES := -source $(CONTEXT_SOURCE) -reviews $(CONTEXT_SOURCE)/review.json -require-reviewed -freeze $(CONTEXT_SOURCE)/holdout.json -history datasets/contextual/v2 -catalog $(CONTEXT_SOURCE)/scenarios.json
 validate-context:
-	go run ./cmd/context-corpus
+	go run ./cmd/context-corpus $(CONTEXT_GATES)
 
 prepare-context:
-	go run ./cmd/context-corpus -out artifacts/contextual
+	go run ./cmd/context-corpus $(CONTEXT_GATES) -out artifacts/contextual
+
+# Existing data/review/lock are never overwritten by reproduction.
+EXPANSION_OUT ?= artifacts/contextual-v3-reproduced
+reproduce-context:
+	mkdir -p artifacts
+	go run ./cmd/context-expand -out $(EXPANSION_OUT)
 
 # A fresh directory prevents overwriting human annotations from earlier runs.
 REVIEW_OUT ?= artifacts/context-review-v1

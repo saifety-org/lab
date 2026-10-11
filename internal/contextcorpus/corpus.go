@@ -19,6 +19,21 @@ import (
 )
 
 const Contract = "context-json-v1"
+const ContractV2 = "context-json-v2"
+
+func contractForSchema(schema int) string {
+	if schema == 2 {
+		return ContractV2
+	}
+	return Contract
+}
+
+func (c *Corpus) Contract() string {
+	if len(c.Rows) != 0 {
+		return contractForSchema(c.Rows[0].Schema)
+	}
+	return Contract
+}
 
 var slug = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
@@ -122,7 +137,7 @@ func Render(r Record) (Sample, error) {
 	if r.Label == nil {
 		return Sample{}, fmt.Errorf("missing label")
 	}
-	input := Input{Contract: Contract, Task: r.Task, Documents: make([]InputDocument, 0, len(r.Documents))}
+	input := Input{Contract: contractForSchema(r.Schema), Task: r.Task, Documents: make([]InputDocument, 0, len(r.Documents))}
 	texts := make([]string, 0, len(r.Documents))
 	for _, d := range r.Documents {
 		input.Documents = append(input.Documents, InputDocument{d.Kind, d.Trust, d.Text})
@@ -195,7 +210,7 @@ func Load(dir string) (*Corpus, error) {
 func Validate(rows []Record, types map[string]bool) error {
 	ids, families, origins := map[string]bool{}, map[string]string{}, map[string]string{}
 	for _, r := range rows {
-		if r.Schema != 1 || !slug.MatchString(r.ID) || !slug.MatchString(r.Family) || ids[r.ID] {
+		if (r.Schema != 1 && r.Schema != 2) || r.Schema != rows[0].Schema || !slug.MatchString(r.ID) || !slug.MatchString(r.Family) || ids[r.ID] {
 			return fmt.Errorf("invalid/duplicate ID %q", r.ID)
 		}
 		ids[r.ID] = true
@@ -232,7 +247,8 @@ func Validate(rows []Record, types map[string]bool) error {
 		}
 		docIDs := map[string]bool{}
 		for _, d := range r.Documents {
-			if d.ID == "" || docIDs[d.ID] || d.Locator == "" || d.Language == "" || strings.TrimSpace(d.Text) == "" || d.Trust != "untrusted" {
+			validTrust := d.Trust == "untrusted" || (r.Schema == 2 && d.Trust == "user-provided")
+			if d.ID == "" || docIDs[d.ID] || d.Locator == "" || d.Language == "" || strings.TrimSpace(d.Text) == "" || !validTrust {
 				return fmt.Errorf("%s: invalid document/trust", r.ID)
 			}
 			docIDs[d.ID] = true
@@ -289,6 +305,7 @@ func (c *Corpus) Manifest() map[string]any {
 	}
 	m := map[string]any{"schema": 1, "contract": Contract, "rows": len(c.Rows), "families": len(families), "counts": counts, "source_sha256": c.Sources, "split_policy": "author-assigned scenario families before translations/paired controls; no random row split", "seed": 0, "near_duplicate_policy": "NFKC/casefold/whitespace character 5-gram Jaccard >= 0.8 requires shared family", "review_status": "human review pending; synthetic development corpus, not independent protection benchmark", "license": "NOASSERTION; no external data imported"}
 	reviews := map[string]int{}
+	m["contract"] = c.Contract()
 	for _, r := range c.Rows {
 		reviews[r.Provenance.Review]++
 	}

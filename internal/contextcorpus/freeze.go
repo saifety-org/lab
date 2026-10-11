@@ -45,10 +45,15 @@ func NewFreeze(c, historical *Corpus, l ReviewLedger, catalog []byte, at string)
 	if err != nil {
 		return f, err
 	}
+	if source.Version == 4 {
+		if _, err := c.TaskBalanceAudit(); err != nil {
+			return f, err
+		}
+	}
 	// Prevent a plausible-looking but unrelated catalog hash from becoming evidence.
 	expected := map[string]Record{}
 	for _, s := range source.Scenarios {
-		for _, r := range scenarioRows(s, source.License) {
+		for _, r := range catalogRows(source, s) {
 			if _, exists := expected[r.ID]; exists {
 				return f, fmt.Errorf("duplicate catalog row %s", r.ID)
 			}
@@ -170,6 +175,14 @@ func (c *Corpus) Coverage() map[string]any {
 	for key, set := range families {
 		groups[key] = len(set)
 	}
+	caution := "Rows sharing family, translation, payload or permission counterfactual are dependent; do not treat row count as independent sample count. V3 task language is English."
+	for _, r := range c.Rows {
+		for _, tag := range r.Tags {
+			if tag == "expansion-v4" {
+				caution = "V4 tasks remain English; task/provenance balance is structural only. Translations, controls and history are dependent; no natural or independent benchmark claim."
+			}
+		}
+	}
 	return map[string]any{"contract": c.Contract(), "rows_by_split_type_document_language_label": counts,
-		"families_by_split_type": groups, "caution": "Rows sharing family, translation, payload or permission counterfactual are dependent; do not treat row count as independent sample count. V3 task language is English."}
+		"families_by_split_type": groups, "caution": caution}
 }

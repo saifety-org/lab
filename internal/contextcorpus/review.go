@@ -157,10 +157,31 @@ func (c *Corpus) BuildReview() (ReviewPacket, ReviewLedger) {
 	}
 	sort.Slice(l.Groups, func(i, j int) bool { return l.Groups[i].Family < l.Groups[j].Family })
 	sort.Slice(docs, func(i, j int) bool { return docs[i].row+"/"+docs[i].id < docs[j].row+"/"+docs[j].id })
+	// Identical canonical text within one family cannot add a new lexical
+	// candidate. Keep the first sorted representative, preserving pair evidence.
+	compact := docs[:0]
+	seenDocs := map[string]bool{}
+	for _, d := range docs {
+		keys := make([]string, 0, len(d.grams))
+		for key := range d.grams {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		b, _ := encode(keys)
+		key := d.family + "/" + string(b)
+		if !seenDocs[key] {
+			compact = append(compact, d)
+			seenDocs[key] = true
+		}
+	}
+	docs = compact
 	pairs := map[string]ReviewPair{}
 	for i, a := range docs {
 		for _, b := range docs[:i] {
 			if a.family == b.family {
+				continue
+			}
+			if !possibleNear(a.grams, b.grams) {
 				continue
 			}
 			score := jaccard(a.grams, b.grams)
@@ -185,6 +206,12 @@ func (c *Corpus) BuildReview() (ReviewPacket, ReviewLedger) {
 		l.Pairs = append(l.Pairs, PairJudgment{pair.A, pair.B, "pending", ""})
 	}
 	return p, l
+}
+
+// Intersection cannot exceed the smaller set: a size ratio below .8
+// cannot meet the corpus near-copy threshold regardless of content.
+func possibleNear(x, y map[string]bool) bool {
+	return min(len(x), len(y))*5 >= max(len(x), len(y))*4
 }
 
 func jaccard(x, y map[string]bool) float64 {

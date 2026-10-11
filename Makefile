@@ -63,8 +63,8 @@ ci-build: build
 	go build -tags onnx -o bin/bench ./cmd/bench
 
 .PHONY: validate-context prepare-context review-context reproduce-context
-CONTEXT_SOURCE := datasets/contextual/v3
-CONTEXT_GATES := -source $(CONTEXT_SOURCE) -reviews $(CONTEXT_SOURCE)/review.json -require-reviewed -freeze $(CONTEXT_SOURCE)/holdout.json -history datasets/contextual/v2 -catalog $(CONTEXT_SOURCE)/scenarios.json
+CONTEXT_SOURCE := datasets/contextual/v4
+CONTEXT_GATES := -source $(CONTEXT_SOURCE) -reviews $(CONTEXT_SOURCE)/review.json -require-reviewed -freeze $(CONTEXT_SOURCE)/holdout.json -history datasets/contextual/v3 -catalog $(CONTEXT_SOURCE)/scenarios.json -require-task-balanced
 validate-context:
 	go run ./cmd/context-corpus $(CONTEXT_GATES)
 
@@ -82,3 +82,14 @@ REVIEW_OUT ?= artifacts/context-review-v1
 review-context:
 	mkdir -p artifacts
 	go run ./cmd/context-corpus -review-out $(REVIEW_OUT)
+
+.PHONY: reproduce-context-v4 task-baseline-context
+BALANCED_OUT ?= artifacts/contextual-v4-reproduced
+reproduce-context-v4:
+	mkdir -p artifacts
+	go run ./cmd/context-expand -scenarios datasets/contextual/v4/scenarios.json -previous datasets/contextual/v3 -out $(BALANCED_OUT)
+
+TASK_BASELINE_OUT ?= artifacts/task-only-v4
+task-baseline-context:
+	mkdir -p artifacts
+	go run ./cmd/context-corpus $(CONTEXT_GATES) -task-baseline-out $(TASK_BASELINE_OUT)

@@ -33,6 +33,8 @@ type Scenario struct {
 	ControlMode   string            `json:"control_mode"`
 	Payload       map[string]string `json:"payload"`
 	Review        ScenarioReview    `json:"review"`
+	Benign        map[string]string `json:"benign_payload,omitempty"`
+	Escalation    map[string]string `json:"escalation_payload,omitempty"`
 }
 
 type ScenarioReview struct {
@@ -58,7 +60,7 @@ func decodeScenarios(b []byte) (ScenarioCatalog, error) {
 	if err := strict(b, &c); err != nil {
 		return c, err
 	}
-	if c.Schema != 1 || c.Version != 3 || c.Origin == "" || c.License == "" || len(c.Scenarios) == 0 {
+	if c.Schema != 1 || (c.Version != 3 && c.Version != 4) || c.Origin == "" || c.License == "" || len(c.Scenarios) == 0 {
 		return c, fmt.Errorf("invalid scenario catalog")
 	}
 	if _, err := time.Parse(time.RFC3339, c.ReviewedAt); err != nil {
@@ -88,6 +90,22 @@ func decodeScenarios(b []byte) (ScenarioCatalog, error) {
 			}
 			if len(strings.Split(s.Payload[lang], "\n---DOC---\n")) != len(strings.Split(s.Payload["en"], "\n---DOC---\n")) {
 				return c, fmt.Errorf("translation changes document boundaries: %s/%s", s.ID, lang)
+			}
+		}
+		if c.Version == 3 && (len(s.Benign) != 0 || len(s.Escalation) != 0) {
+			return c, fmt.Errorf("v4 payload fields cannot alter v3")
+		}
+		if c.Version == 4 {
+			for name, values := range map[string]map[string]string{"benign": s.Benign, "escalation": s.Escalation} {
+				if len(values) != 4 {
+					return c, fmt.Errorf("%s requires four %s translations", s.ID, name)
+				}
+				for _, lang := range []string{"en", "ru", "es", "zh"} {
+					if strings.TrimSpace(values[lang]) == "" || values[lang] == s.Payload[lang] ||
+						len(strings.Split(values[lang], "\n---DOC---\n")) != len(strings.Split(s.Payload[lang], "\n---DOC---\n")) {
+						return c, fmt.Errorf("invalid %s payload/boundaries for %s/%s", name, s.ID, lang)
+					}
+				}
 			}
 		}
 	}
@@ -207,9 +225,9 @@ func Expand(catalogPath, previousDir, out string) error {
 		r.Split = "development"
 		r.Schema = 2
 		j.ID = reviewID("r-", r)
-		j.Notes = "Inherited v2 judgment; moved to development only, never a new holdout. " + j.Notes
+		j.Notes = fmt.Sprintf("Inherited v%d judgment; moved to development only, never a new holdout. ", catalog.Version-1) + j.Notes
 		judgments[j.ID] = j
-		groupNotes[reviewID("f-", r.Family)] = "Historical v2 family, entirely development-only. " + oldGroups[reviewID("f-", r.Family)]
+		groupNotes[reviewID("f-", r.Family)] = fmt.Sprintf("Historical v%d family, entirely development-only. ", catalog.Version-1) + oldGroups[reviewID("f-", r.Family)]
 		rows = append(rows, r)
 	}
 	for _, s := range catalog.Scenarios {
@@ -220,7 +238,7 @@ func Expand(catalogPath, previousDir, out string) error {
 		if !known {
 			return fmt.Errorf("unknown scenario type %s", s.PrimaryType)
 		}
-		for _, r := range scenarioRows(s, catalog.License) {
+		for _, r := range catalogRows(catalog, s) {
 			rows = append(rows, r)
 			judgments[reviewID("r-", r)] = RowJudgment{ID: reviewID("r-", r), Label: r.Label,
 				PrimaryType: r.PrimaryType, Authorization: "pass", TrustBoundaries: "pass", Translation: "pass",
@@ -272,6 +290,11 @@ func Expand(catalogPath, previousDir, out string) error {
 	}
 	for i := range l.Groups {
 		l.Groups[i].Status, l.Groups[i].Notes = "pass", groupNotes[l.Groups[i].Family]
+	}
+	if catalog.Version == 4 {
+		l.Protocol = "docs/task-balanced-corpus-v4.md: explicit scenario judgments, matched task/document controls; inherited v3 review development-only"
+		l.Limitations = "Same assistant authored and reviewed synthetic content; not blind or independent. EN tasks with EN/RU/ES/ZH/mixed document variants. Exact task/kind/trust/document-count balance removes those marginal shortcuts, not every semantic or stylistic shortcut. Public holdout seen by author, frozen before downstream fitting. NOASSERTION data license."
+		l.ReconciliationNotes = "Every task has both labels under identical carrier/provenance/count; permission pairs share identical payload; user-provided never grants instruction priority. All v3 history preserved development-only."
 	}
 	result, err := c.CheckReview(p, l)
 	if err != nil || result.Status != "complete" {

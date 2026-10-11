@@ -1,4 +1,4 @@
-// Command context-expand reproduces the reviewed synthetic v3 expansion.
+// Command context-expand reproduces reviewed synthetic contextual expansions.
 package main
 
 import (

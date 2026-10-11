@@ -78,3 +78,29 @@ func TestReviewFlagErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskBaselineRequiresVerifiedFreezeAndBalance(t *testing.T) {
+	for _, args := range [][]string{
+		{"-task-baseline-out", "out"},
+		{"-task-baseline-out", "out", "-freeze", "lock", "-require-reviewed"},
+		{"-task-audit-out", "audit"},
+		{"-task-audit-out", "audit", "-require-task-balanced"},
+	} {
+		if err := execute(args, &bytes.Buffer{}); err == nil {
+			t.Fatalf("unsafe baseline/audit flags accepted: %v", args)
+		}
+	}
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "prepared")
+	audit := filepath.Join(tmp, "audit.json")
+	source := "../../datasets/contextual/v3"
+	err := execute([]string{"-source", source, "-reviews", filepath.Join(source, "review.json"), "-require-reviewed", "-require-task-balanced", "-task-audit-out", audit, "-out", out}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("observed v3 shortcut accepted")
+	}
+	for _, path := range []string{out, audit} {
+		if _, err = os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("wrote artifacts before balance gate")
+		}
+	}
+}

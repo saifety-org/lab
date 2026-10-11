@@ -106,8 +106,8 @@ make ci-build             # all supported build variants
 `GOWORK=off` and `-mod=readonly` prevent local workspace overrides or implicit
 module edits. Actions are pinned by commit; the linter version is pinned in
 both CI and Makefile. Checks have timeouts and newer runs cancel stale runs
-on the same PR. CI does not download inference models, train candidates or
-run full benchmarks. ONNX integration tests requiring cached assets skip
+on the same PR. CI does not download inference models or run encoder training
+and full benchmarks. Tests do fit the small task-only diagnostic. ONNX integration tests requiring cached assets skip
 when those assets are absent; tagged code still compiles and is linted.
 
 The linter uses the standard checks (`errcheck`, `govet`, `ineffassign`,
@@ -121,17 +121,28 @@ without executing that benchmark or downloading its runtime/model assets.
 
 ## Контекстные данные
 
-[Корпус v3](datasets/contextual/v3/README.md): 42 новых сценарных семейства,
-840 новых записей по 7 типам, EN/RU/ES/ZH и mixed EN/RU в документах.
-Задачи остаются английскими; есть контрфактуальные разрешения и происхождение
-источника, безопасные цитаты/код/документация. Новый `context-json-v2` требует
-явной адаптации старого Python workflow перед обучением.
-Проверка: `make validate-context`; подготовка: `make prepare-context`.
-Новый test заморожен до последующего выбора модели/порогов; это 14 синтетических
-семейств, не независимое авторство или доказанное улучшение защиты. Все 252 строки
-v2 находятся в development, включая наблюдавшийся test и карантин. Модельное
-ревью проведено автором; ручная разметка от пользователя не требуется.
-Процедура и ограничения: [расширение v3](docs/corpus-expansion-v3.md).
+[Корпус v4](datasets/contextual/v4/README.md) устраняет обнаруженную в v3
+зависимость метки от формулировки задачи. 42 новых сценарных семейства, 1680
+новых записей: train/validation/test по 560, по 14 семей и 280 строк каждой метки.
+Каждая задача сочетается с обеими метками при одинаковых kind/trust/числе
+документов. 70 authorization pairs на split сохранены; `user-provided` означает
+происхождение, не приоритет инструкции. Документы EN/RU/ES/ZH/mixed EN/RU,
+задачи английские. Все 1092 исторических строки v3 — только development.
+
+`make validate-context` и `make prepare-context` проверяют review, frozen holdout
+и task-label balance до записи данных. `make reproduce-context-v4` воспроизводит
+новую версию в отдельной директории. `make task-baseline-context` обучает
+диагностический task-only native baseline на train и оценивает train/validation:
+accuracy=50%, AP=0.5; **test моделью не оценивается**. Фиксация test сделана до fitting.
+Это исправление измерения, не доказанное улучшение encoder или приложения.
+Метод модельного авторского ревью и ограничения —
+[task-balanced v4](docs/task-balanced-corpus-v4.md).
+
+`context-json-v2` совместим с parser, принятым в [lab-py#3](https://github.com/saifety-org/lab-py/pull/3).
+Его источник пока закреплён на v3; обучение на v4 требует отдельного обновления
+lock на принятый commit lab. [V3](datasets/contextual/v3/README.md) и `make reproduce-context`
+сохранены как наблюдённый диагностический benchmark. Данные не являются командами
+для исполнения. Ручная разметка от пользователя не требуется.
 
 `make review-context` готовит слепой HTML/JSON пакет и шаблон решений.
 Приёмка заполненного журнала: `go run ./cmd/context-corpus -reviews <file> -require-reviewed`.

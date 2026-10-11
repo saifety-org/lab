@@ -18,7 +18,7 @@ func run(args []string) error {
 
 func execute(args []string, output io.Writer) error {
 	flags := flag.NewFlagSet("context-corpus", flag.ContinueOnError)
-	dir := flags.String("source", "datasets/contextual/v3", "corpus directory")
+	dir := flags.String("source", "datasets/contextual/v4", "corpus directory")
 	out := flags.String("out", "", "optional prepared artifact directory")
 	reviewOut := flags.String("review-out", "", "new directory for blinded human review packet")
 	reviewKey := flags.String("review-key-out", "", "new unblinded answer key file for post-blind reconciliation; keep separate from reviewers")
@@ -27,12 +27,24 @@ func execute(args []string, output io.Writer) error {
 	freeze := flags.String("freeze", "", "verify committed holdout lock before preparing data")
 	freezeOut := flags.String("freeze-out", "", "create a new holdout lock; refuses overwrite")
 	history := flags.String("history", "", "historical corpus required for holdout verification")
+	requireBalanced := flags.Bool("require-task-balanced", false, "reject task/metadata-label shortcuts in supervised splits")
+	baselineOut := flags.String("task-baseline-out", "", "new directory for train/validation task-only diagnostic; requires verified existing freeze")
+	auditOut := flags.String("task-audit-out", "", "write structural task-balance audit after all gates")
 	catalog := flags.String("catalog", "", "reviewed scenario catalog required for holdout verification")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
+	}
+	if *baselineOut != "" && (*freeze == "" || !*requireReviewed || !*requireBalanced || *out != "") {
+		return fmt.Errorf("task baseline requires existing freeze, complete review and task-balance gate; cannot combine with preparation")
+	}
+	if *auditOut != "" && *reviews == "" {
+		return fmt.Errorf("audit output requires reviewed corpus")
+	}
+	if *auditOut != "" && !*requireBalanced {
+		return fmt.Errorf("task audit requires -require-task-balanced")
 	}
 	locked := *freeze != "" || *freezeOut != ""
 	if locked && (*reviews == "" || *history == "" || *catalog == "" || *reviewOut != "" || (*freeze != "" && *freezeOut != "")) {
@@ -56,6 +68,13 @@ func execute(args []string, output io.Writer) error {
 	c, err := contextcorpus.Load(*dir)
 	if err != nil {
 		return err
+	}
+	var audit contextcorpus.TaskBalance
+	if *requireBalanced {
+		audit, err = c.TaskBalanceAudit()
+		if err != nil {
+			return err
+		}
 	}
 	if *reviewKey != "" {
 		return c.WriteReviewKey(*reviewKey)
@@ -108,6 +127,20 @@ func execute(args []string, output io.Writer) error {
 				if e = contextcorpus.WriteFreeze(*freezeOut, f); e != nil {
 					return e
 				}
+			}
+		}
+		if *auditOut != "" {
+			b, e := json.MarshalIndent(audit, "", "  ")
+			if e != nil {
+				return e
+			}
+			if e = os.WriteFile(*auditOut, append(b, '\n'), 0644); e != nil {
+				return e
+			}
+		}
+		if *baselineOut != "" {
+			if e := c.WriteTaskBaseline(*baselineOut); e != nil {
+				return e
 			}
 		}
 		if *out != "" {

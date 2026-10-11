@@ -261,23 +261,35 @@ func Validate(rows []Record, types map[string]bool) error {
 	// undeclared exact/near-copy leakage; it cannot discover semantic translations.
 	// Cache normalization and grams once per row; repeated corpus checks in CI
 	// otherwise rebuild them for every pair, particularly expensive under -race.
-	texts := make([]string, len(rows))
-	payloads := make([]map[string]bool, len(rows))
-	for i, a := range rows {
+	contexts := map[string]string{}
+	type payload struct {
+		family, id string
+		grams      map[string]bool
+	}
+	unique := []payload{}
+	seenPayload := map[string]bool{}
+	for _, a := range rows {
 		sa, err := Render(a)
 		if err != nil {
 			return err
 		}
-		texts[i] = canonical(sa.Text)
-		payloads[i] = grams(sa.PayloadText)
-		for j, b := range rows[:i] {
-			if texts[i] == texts[j] {
-				return fmt.Errorf("duplicate context: %s/%s", a.ID, b.ID)
-			}
-			if a.Family != b.Family && jaccard(payloads[i], payloads[j]) >= .8 {
-				return fmt.Errorf("near-copy must share family: %s/%s", a.ID, b.ID)
+		text := canonical(sa.Text)
+		if prior, ok := contexts[text]; ok {
+			return fmt.Errorf("duplicate context: %s/%s", a.ID, prior)
+		}
+		contexts[text] = a.ID
+		key := a.Family + "/" + canonical(sa.PayloadText)
+		if seenPayload[key] {
+			continue
+		}
+		seenPayload[key] = true
+		current := payload{a.Family, a.ID, grams(sa.PayloadText)}
+		for _, prior := range unique {
+			if current.family != prior.family && possibleNear(current.grams, prior.grams) && jaccard(current.grams, prior.grams) >= .8 {
+				return fmt.Errorf("near-copy must share family: %s/%s", current.id, prior.id)
 			}
 		}
+		unique = append(unique, current)
 	}
 	return nil
 }

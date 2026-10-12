@@ -29,6 +29,8 @@ make compare     # подготовка, обучение кандидата, о
 
 ## Состав
 
+- [datasets/agent-harness/v1](datasets/agent-harness/v1/README.md) — 16 синтетических
+  сценариев для изолированного agent harness в lab-py; парные атаки и разрешённые действия.
 - `datasets/training/` — тренировочные данные и атрибуция источников.
 - `internal/training/`, `cmd/train/` — генерация и обучение кандидатов.
 - `testdata/adversarial/`, `testdata/corpus/`, `internal/regression/` —

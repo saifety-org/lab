@@ -123,6 +123,11 @@ without executing that benchmark or downloading its runtime/model assets.
 
 ## Контекстные данные
 
+[Сбор кандидатов v5](datasets/contextual/v5/README.md): новый Go CLI для offline
+плана, raw candidate validation и явного bounded сбора через локальную Ollama.
+Source/template copies связываются в группы; непроверенный пул не считается
+готовым train/test и не заменяет v4. Генерации выполняются отдельным заданием ПК.
+
 [Корпус v4](datasets/contextual/v4/README.md) устраняет обнаруженную в v3
 зависимость метки от формулировки задачи. 42 новых сценарных семейства, 1680
 новых записей: train/validation/test по 560, по 14 семей и 280 строк каждой метки.

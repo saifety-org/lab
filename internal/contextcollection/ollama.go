@@ -189,7 +189,7 @@ func Collect(ctx context.Context, c *LocalClient, rawPlan []byte, start, count, 
 	if err = Strict(rawPlan, &plan); err != nil {
 		return err
 	}
-	if plan.Schema != "saifety-context-collection-plan-v1" || !hexDigest.MatchString(plan.ProtocolSHA256) || start < 0 || count < 1 || count > 64 || start > len(plan.Slots)-count || tokens < 256 || tokens > 8192 || (license != "CC0-1.0" && license != "MIT") {
+	if plan.Schema != "saifety-context-collection-plan-v1" || !hexDigest.MatchString(plan.ProtocolSHA256) || start < 0 || count < 1 || count > 64 || start > len(plan.Slots)-count || tokens < 256 || tokens > 8192 || (license != "CC0-1.0" && license != "MIT" && license != "NOASSERTION") {
 		return fmt.Errorf("invalid bounded collection request")
 	}
 	for i, slot := range plan.Slots {

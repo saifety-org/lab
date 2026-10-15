@@ -180,7 +180,7 @@ func TestCheckpointsAndStopOnFailure(t *testing.T) {
 			p := Plan{Schema: "saifety-context-collection-plan-v1", ProtocolSHA256: strings.Repeat("a", 64), Slots: []Slot{{0, "en", "instruction-override", "file", "development"}, {1, "ru", "data-exfiltration", "web", "development"}}, Policy: "test"}
 			raw, _ := json.Marshal(p)
 			out := filepath.Join(t.TempDir(), "run")
-			err := Collect(context.Background(), c, raw, 0, 2, 2048, "CC0-1.0", out)
+			err := Collect(context.Background(), c, raw, 0, 2, 2048, "NOASSERTION", out)
 			if mode == "good" {
 				if err != nil || calls.Load() != 2 {
 					t.Fatalf("%v %d", err, calls.Load())
@@ -198,6 +198,25 @@ func TestCheckpointsAndStopOnFailure(t *testing.T) {
 			}
 			if receipt.Complete != (mode == "good") {
 				t.Fatal("invalid completeness")
+			}
+			if receipt.License != "NOASSERTION" {
+				t.Fatal("local collection assigned a public license")
+			}
+			if mode == "good" {
+				candidateBytes, readErr := os.ReadFile(filepath.Join(out, "candidate-000000.json"))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				var candidate Family
+				if readErr = Strict(candidateBytes, &candidate); readErr != nil {
+					t.Fatal(readErr)
+				}
+				if candidate.License != "NOASSERTION" {
+					t.Fatal("candidate received a public license")
+				}
+				if Publish([]Family{candidate}, filepath.Join(t.TempDir(), "publication")) == nil {
+					t.Fatal("local unlicensed candidate exported for publication")
+				}
 			}
 			if mode != "good" && receipt.Accepted != 0 {
 				t.Fatal("bad candidate accepted")
@@ -225,7 +244,7 @@ func TestInvalidBudgetAndPlanFailBeforeGeneration(t *testing.T) {
 	if Collect(context.Background(), c, b, 0, 65, 2048, "CC0-1.0", filepath.Join(t.TempDir(), "bad")) == nil || calls.Load() != 0 {
 		t.Fatal("oversized batch generated")
 	}
-	if Collect(context.Background(), c, b, 0, 1, 2048, "NOASSERTION", filepath.Join(t.TempDir(), "bad")) == nil || calls.Load() != 0 {
+	if Collect(context.Background(), c, b, 0, 1, 2048, "", filepath.Join(t.TempDir(), "bad")) == nil || calls.Load() != 0 {
 		t.Fatal("unknown license generated")
 	}
 }

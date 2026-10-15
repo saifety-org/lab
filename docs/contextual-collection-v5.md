@@ -51,7 +51,13 @@ Plan требует точный protocol SHA256 и запрещает overwrite
 авторских заданий, **не** утверждение о замороженных test splits. Raw pool не
 поступает в fit; confirmation не оценивается моделью этим сборщиком.
 
-После отдельного явного выбора лицензии новые оригинальные кандидаты можно
+По текущему решению новые кандидаты остаются локальными с `license=NOASSERTION`.
+Это отсутствие публичной лицензии, а не лицензия для коммерческого использования.
+Сбор, `merge` и `check` работают в этом режиме; raw данные и traces не коммитить.
+CC0 или MIT этим решением не назначаются. Возможная публикация данных потребует
+отдельного выбора условий и разрешения.
+
+Только после такого отдельного решения новые оригинальные кандидаты можно
 разложить по типам для PR:
 
 ```sh
@@ -66,7 +72,7 @@ go run ./cmd/context-collect publish -input INPUT.jsonl -out artifacts/publish-n
 ## Явный запуск на GPU-ПК
 
 Код CLI — Go в lab, job/runbook и pins — в lab-py, статус — в Project.
-До запуска принять PR инструментов и request, проверить main CI и выбор лицензии;
+До запуска принять PR инструментов и request, проверить main CI и режим хранения;
 Backlog не означает разрешение генераций. ПК-агент читает accepted инструкцию,
 claim In Progress, выполняет bounded smoke/pilot, публикует отчёт/ошибки через PR.
 Полный пул собирается отдельным заданием **после** измерения качества/затрат pilot.
@@ -79,7 +85,8 @@ HTTP local server/model считаются operator-trusted.
 
 Запросить максимум64tickets за один запуск; max tokens256..8192, whole job≤2h,
 один request≤180s. Request задаёт точные start/count/token/wall caps и выбранную
-лицензию. Generation temperature0.8/seed1, context8192, think/truncate/shift=false;
+декларацию прав. Для локального пилота явно передаётся `-license NOASSERTION`;
+`publish` с ней запрещён. Generation temperature0.8/seed1, context8192, think/truncate/shift=false;
 это создание разнообразных кандидатов, не повтор старого agent benchmark temp0.
 
 После каждого полученного JSON response сохраняется checkpoint0600, включая

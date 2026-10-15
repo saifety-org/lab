@@ -26,7 +26,7 @@ vet:
 	go vet ./...
 
 build:
-	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus ./cmd/context-expand ./cmd/context-onnx-bridge
+	go build ./cmd/comparison ./cmd/train ./cmd/fetch-data ./cmd/gen-confusables ./cmd/missed-injections ./cmd/model-bridge ./cmd/context-corpus ./cmd/context-expand ./cmd/context-collect ./cmd/context-onnx-bridge
 
 train:
 	go run ./cmd/train -data datasets/training -out artifacts/weights.json -seed 1
@@ -94,3 +94,10 @@ TASK_BASELINE_OUT ?= artifacts/task-only-v4
 task-baseline-context:
 	mkdir -p artifacts
 	go run ./cmd/context-corpus $(CONTEXT_GATES) -task-baseline-out $(TASK_BASELINE_OUT)
+
+# Offline candidate reservations only; never calls a model or assigns training splits.
+.PHONY: plan-context-v5
+CONTEXT_V5_PLAN ?= artifacts/context-collection-v5.plan.json
+plan-context-v5:
+	mkdir -p artifacts
+	go run ./cmd/context-collect plan -input datasets/contextual/v5/protocol.json -sha256 c5bd48ef63338196746a9c0b95f228ab9129283d056db9ab67327bdaba8c1676 -out $(CONTEXT_V5_PLAN)

@@ -1,5 +1,9 @@
 # Сбор контекстных кандидатов v5
 
+Новый генератор: [двухэтапный paired-v2](contextual-collection-paired-v2.md).
+Одноэтапный `collect` сохранён для воспроизводимости первого STOP-пилота;
+новые GPU-задания используют явный `collect-paired` и отдельно учитываемый preload.
+
 [Карточка корпуса](https://github.com/orgs/saifety-org/projects/1?pane=issue&itemId=272440792).
 Этот этап расширяет инструменты и входной пул. Статистические квоты не закрываются
 размножением старых14семейств. [Протокол](../datasets/contextual/v5/protocol.json)

@@ -7,6 +7,8 @@
 
 [Инструкция сбора](../../../docs/contextual-collection-v5.md) описывает Go CLI,
 формат кандидата, лицензирование, checkpoints и отдельное задание GPU-ПК.
+После STOP первого пилота подготовлен [двухэтапный генератор](../../../docs/contextual-collection-paired-v2.md);
+результат его реального GPU-пилота ещё не получен.
 
 `make plan-context-v5` работает offline. 6 380 authoring tickets резервируют:
 700 train, 2 400 validation, 2 400 confirmation, 140 development,

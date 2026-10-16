@@ -39,15 +39,22 @@ type Content struct {
 	Rationale            string   `json:"rationale"`
 }
 type Origin struct {
-	Method         string   `json:"method"`
-	Author         string   `json:"author"`
-	Recipe         string   `json:"recipe"`
-	Model          string   `json:"model,omitempty"`
-	Digest         string   `json:"model_digest,omitempty"`
-	Runtime        string   `json:"runtime,omitempty"`
-	PromptSHA256   string   `json:"prompt_sha256,omitempty"`
-	ResponseSHA256 string   `json:"response_sha256,omitempty"`
-	DerivedFrom    []string `json:"derived_from"`
+	Method         string          `json:"method"`
+	Author         string          `json:"author"`
+	Recipe         string          `json:"recipe"`
+	Model          string          `json:"model,omitempty"`
+	Digest         string          `json:"model_digest,omitempty"`
+	Runtime        string          `json:"runtime,omitempty"`
+	PromptSHA256   string          `json:"prompt_sha256,omitempty"`
+	ResponseSHA256 string          `json:"response_sha256,omitempty"`
+	DerivedFrom    []string        `json:"derived_from"`
+	Stages         []StageEvidence `json:"stages,omitempty"`
+}
+type StageEvidence struct {
+	Name           string `json:"name"`
+	PromptSHA256   string `json:"prompt_sha256"`
+	RequestSHA256  string `json:"request_sha256"`
+	ResponseSHA256 string `json:"response_sha256"`
 }
 type Family struct {
 	Tags            []string `json:"tags"`
@@ -206,12 +213,52 @@ func Validate(f Family) error {
 	if f.Origin.Method == "ollama" && (f.Origin.Model == "" || !hexDigest.MatchString(f.Origin.Digest) || f.Origin.Runtime == "" || !hexDigest.MatchString(f.Origin.PromptSHA256) || !hexDigest.MatchString(f.Origin.ResponseSHA256)) {
 		return fmt.Errorf("missing generation receipt")
 	}
+	if len(f.Origin.Stages) > 0 || strings.HasPrefix(f.Origin.Recipe, "paired-") {
+		if f.Origin.Method != "ollama" || len(f.Origin.Stages) != 2 {
+			return fmt.Errorf("missing paired generation stages")
+		}
+		for i, stage := range f.Origin.Stages {
+			if stage.Name != []string{"base", "escalation"}[i] || !hexDigest.MatchString(stage.PromptSHA256) || !hexDigest.MatchString(stage.RequestSHA256) || !hexDigest.MatchString(stage.ResponseSHA256) {
+				return fmt.Errorf("invalid paired generation evidence")
+			}
+		}
+		prompts, _ := json.Marshal([]string{f.Origin.Stages[0].PromptSHA256, f.Origin.Stages[1].PromptSHA256})
+		replies, _ := json.Marshal([]string{f.Origin.Stages[0].ResponseSHA256, f.Origin.Stages[1].ResponseSHA256})
+		if f.Origin.PromptSHA256 != Hash(prompts) || f.Origin.ResponseSHA256 != Hash(replies) {
+			return fmt.Errorf("paired aggregate evidence differs from stages")
+		}
+	}
 	for _, parent := range f.Origin.DerivedFrom {
 		if !slug.MatchString(parent) {
 			return fmt.Errorf("invalid derivation root")
 		}
 	}
-	c := f.Content
+	if err := validateContent(f.Content, true); err != nil {
+		return err
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		return err
+	}
+	if len(b) > MaxFamilyBytes {
+		return fmt.Errorf("candidate exceeds size limit")
+	}
+	return nil
+}
+
+func equivalentDocs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if canonical(a[i]) != canonical(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func validateContent(c Content, withEscalation bool) error {
 	if strings.TrimSpace(c.Task) == "" || strings.TrimSpace(c.PermittedTask) == "" || canonical(c.Task) == canonical(c.PermittedTask) || strings.TrimSpace(c.Rationale) == "" || len(c.Permissions) == 0 || len(c.PermittedPermissions) == 0 {
 		return fmt.Errorf("missing trusted authorization contract")
 	}
@@ -220,7 +267,7 @@ func Validate(f Family) error {
 			return fmt.Errorf("empty permission")
 		}
 	}
-	if len(c.Payload) == 0 || len(c.Payload) > 32 || len(c.Benign) != len(c.Payload) || len(c.Escalation) != len(c.Payload) {
+	if len(c.Payload) == 0 || len(c.Payload) > 32 || len(c.Benign) != len(c.Payload) || (withEscalation && len(c.Escalation) != len(c.Payload)) {
 		return fmt.Errorf("document boundary mismatch")
 	}
 	for _, docs := range [][]string{c.Payload, c.Benign, c.Escalation} {
@@ -230,15 +277,8 @@ func Validate(f Family) error {
 			}
 		}
 	}
-	if equal(c.Payload, c.Benign) || equal(c.Payload, c.Escalation) || equal(c.Benign, c.Escalation) {
+	if equivalentDocs(c.Payload, c.Benign) || (withEscalation && (equivalentDocs(c.Payload, c.Escalation) || equivalentDocs(c.Benign, c.Escalation))) {
 		return fmt.Errorf("counterfactual documents must differ")
-	}
-	b, err := json.Marshal(f)
-	if err != nil {
-		return err
-	}
-	if len(b) > MaxFamilyBytes {
-		return fmt.Errorf("candidate exceeds size limit")
 	}
 	return nil
 }

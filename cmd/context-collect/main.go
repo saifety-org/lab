@@ -34,7 +34,7 @@ func read(path string, limit int64) ([]byte, error) {
 }
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("choose plan, check, publish, merge or explicit collect")
+		return fmt.Errorf("choose plan, check, publish, merge, preload, collect or collect-paired")
 	}
 	cmd := args[0]
 	f := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -140,7 +140,15 @@ func run(args []string) error {
 			return err
 		}
 		return file.Close()
-	case "collect":
+	case "preload":
+		c, err := contextcollection.NewLocalClient(*endpoint, *model, *digest)
+		if err != nil {
+			return err
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		return contextcollection.Preload(ctx, c, *out)
+	case "collect", "collect-paired":
 		if *wall <= 0 || *wall > 2*time.Hour {
 			return fmt.Errorf("wall-time must be positive and at most2h")
 		}
@@ -159,6 +167,9 @@ func run(args []string) error {
 		defer stop()
 		ctx, cancel := context.WithTimeout(interrupt, *wall)
 		defer cancel()
+		if cmd == "collect-paired" {
+			return contextcollection.CollectPaired(ctx, c, b, *start, *count, *tokens, *license, *out)
+		}
 		return contextcollection.Collect(ctx, c, b, *start, *count, *tokens, *license, *out)
 	default:
 		return fmt.Errorf("unknown command")

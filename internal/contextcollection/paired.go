@@ -247,11 +247,20 @@ type LoadReceipt struct {
 	Complete       bool     `json:"complete"`
 	Phase          string   `json:"phase"`
 	Failure        string   `json:"failure,omitempty"`
+	WallTimeCap    string   `json:"wall_time_cap,omitempty"`
 }
 
 // Preload performs exactly one empty-prompt load, separately from corpus generation.
 func Preload(ctx context.Context, c *LocalClient, out string) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	return PreloadWithTimeout(ctx, c, out, 5*time.Minute)
+}
+
+// PreloadWithTimeout keeps the load budget explicit and finite; chat timeouts are unchanged.
+func PreloadWithTimeout(ctx context.Context, c *LocalClient, out string, budget time.Duration) (err error) {
+	if budget <= 0 || budget > 15*time.Minute {
+		return fmt.Errorf("preload timeout must be positive and at most15m")
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	identity, err := c.Inspect(ctx)
 	if err != nil {
@@ -262,7 +271,7 @@ func Preload(ctx context.Context, c *LocalClient, out string) (err error) {
 	}
 	payload := map[string]any{"model": c.model, "prompt": "", "stream": false, "keep_alive": "10m", "options": map[string]any{"num_predict": 0, "num_ctx": 8192}}
 	b, _ := json.Marshal(payload)
-	r := LoadReceipt{Schema: "saifety-context-preload-receipt-v1", Identity: identity, StartedUTC: time.Now().UTC().Format(time.RFC3339Nano), RequestSHA256: Hash(b), Phase: "request-checkpoint"}
+	r := LoadReceipt{Schema: "saifety-context-preload-receipt-v1", Identity: identity, StartedUTC: time.Now().UTC().Format(time.RFC3339Nano), RequestSHA256: Hash(b), Phase: "request-checkpoint", WallTimeCap: budget.String()}
 	defer func() {
 		r.CompletedUTC = time.Now().UTC().Format(time.RFC3339Nano)
 		if err != nil {
@@ -280,7 +289,7 @@ func Preload(ctx context.Context, c *LocalClient, out string) (err error) {
 	r.Phase = "model-load"
 	loader := *c
 	client := *c.client
-	client.Timeout = 5 * time.Minute
+	client.Timeout = budget
 	loader.client = &client
 	var reply LoadResponse
 	if err = loader.request(ctx, "/api/generate", payload, &reply); err != nil {

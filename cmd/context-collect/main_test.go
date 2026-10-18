@@ -55,6 +55,9 @@ func TestPlanPinnedOfflineAndNoOverwrite(t *testing.T) {
 	if run([]string{"collect-paired", "-input", out, "-sha256", strings.Repeat("f", 64), "-out", filepath.Join(t.TempDir(), "nothing-paired")}) == nil {
 		t.Fatal("unpinned paired plan accepted")
 	}
+	if run([]string{"collect-contracts", "-input", out, "-sha256", strings.Repeat("f", 64), "-out", filepath.Join(t.TempDir(), "nothing-contracts")}) == nil {
+		t.Fatal("unpinned contract plan accepted")
+	}
 	if run([]string{"preload", "-ollama-url", "http://example.invalid", "-model", "local", "-model-digest", strings.Repeat("a", 64), "-out", filepath.Join(t.TempDir(), "load")}) == nil {
 		t.Fatal("nonlocal preload accepted")
 	}

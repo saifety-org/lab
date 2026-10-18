@@ -34,7 +34,7 @@ func read(path string, limit int64) ([]byte, error) {
 }
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("choose plan, check, publish, merge, preload, collect or collect-paired")
+		return fmt.Errorf("choose plan, check, check-contracts, review-contracts, publish, merge, preload, collect, collect-paired or collect-contracts")
 	}
 	cmd := args[0]
 	f := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -50,6 +50,7 @@ func run(args []string) error {
 	count := f.Int("count", 4, "bounded batch,1..64")
 	tokens := f.Int("tokens", 2048, "per-request token cap,256..8192")
 	wall := f.Duration("wall-time", 2*time.Hour, "whole job cap, at most2h")
+	preloadTimeout := f.Duration("preload-timeout", 5*time.Minute, "empty-prompt load cap, positive and at most15m")
 	if err := f.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -70,13 +71,23 @@ func run(args []string) error {
 			return err
 		}
 		return contextcollection.WriteJSON(*out, p)
-	case "check", "publish":
+	case "check", "check-contracts", "review-contracts", "publish":
 		rows, err := contextcollection.Load(*input)
 		if err != nil {
 			return err
 		}
 		if cmd == "publish" {
 			return contextcollection.Publish(rows, *out)
+		}
+		if cmd == "check-contracts" {
+			report, err := contextcollection.CheckContracts(rows, *from)
+			if err != nil {
+				return err
+			}
+			return contextcollection.WriteJSON(*out, report)
+		}
+		if cmd == "review-contracts" {
+			return contextcollection.ReviewContracts(rows, *count, *out)
 		}
 		return contextcollection.WriteJSON(*out, contextcollection.Report(rows))
 	case "merge":
@@ -147,8 +158,8 @@ func run(args []string) error {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
-		return contextcollection.Preload(ctx, c, *out)
-	case "collect", "collect-paired":
+		return contextcollection.PreloadWithTimeout(ctx, c, *out, *preloadTimeout)
+	case "collect", "collect-paired", "collect-contracts":
 		if *wall <= 0 || *wall > 2*time.Hour {
 			return fmt.Errorf("wall-time must be positive and at most2h")
 		}
@@ -167,6 +178,9 @@ func run(args []string) error {
 		defer stop()
 		ctx, cancel := context.WithTimeout(interrupt, *wall)
 		defer cancel()
+		if cmd == "collect-contracts" {
+			return contextcollection.CollectContracts(ctx, c, b, *start, *count, *tokens, *license, *out)
+		}
 		if cmd == "collect-paired" {
 			return contextcollection.CollectPaired(ctx, c, b, *start, *count, *tokens, *license, *out)
 		}

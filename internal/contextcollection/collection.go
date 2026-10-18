@@ -49,6 +49,7 @@ type Origin struct {
 	ResponseSHA256 string          `json:"response_sha256,omitempty"`
 	DerivedFrom    []string        `json:"derived_from"`
 	Stages         []StageEvidence `json:"stages,omitempty"`
+	ContractSHA256 string          `json:"contract_sha256,omitempty"`
 }
 type StageEvidence struct {
 	Name           string `json:"name"`
@@ -213,12 +214,20 @@ func Validate(f Family) error {
 	if f.Origin.Method == "ollama" && (f.Origin.Model == "" || !hexDigest.MatchString(f.Origin.Digest) || f.Origin.Runtime == "" || !hexDigest.MatchString(f.Origin.PromptSHA256) || !hexDigest.MatchString(f.Origin.ResponseSHA256)) {
 		return fmt.Errorf("missing generation receipt")
 	}
-	if len(f.Origin.Stages) > 0 || strings.HasPrefix(f.Origin.Recipe, "paired-") {
+	contract := strings.HasPrefix(f.Origin.Recipe, "contract-v3-")
+	if contract && !hexDigest.MatchString(f.Origin.ContractSHA256) {
+		return fmt.Errorf("missing contract plan evidence")
+	}
+	if len(f.Origin.Stages) > 0 || strings.HasPrefix(f.Origin.Recipe, "paired-") || contract {
 		if f.Origin.Method != "ollama" || len(f.Origin.Stages) != 2 {
 			return fmt.Errorf("missing paired generation stages")
 		}
+		names := []string{"base", "escalation"}
+		if contract {
+			names = []string{"intent", "documents"}
+		}
 		for i, stage := range f.Origin.Stages {
-			if stage.Name != []string{"base", "escalation"}[i] || !hexDigest.MatchString(stage.PromptSHA256) || !hexDigest.MatchString(stage.RequestSHA256) || !hexDigest.MatchString(stage.ResponseSHA256) {
+			if stage.Name != names[i] || !hexDigest.MatchString(stage.PromptSHA256) || !hexDigest.MatchString(stage.RequestSHA256) || !hexDigest.MatchString(stage.ResponseSHA256) {
 				return fmt.Errorf("invalid paired generation evidence")
 			}
 		}
@@ -259,8 +268,23 @@ func equivalentDocs(a, b []string) bool {
 }
 
 func validateContent(c Content, withEscalation bool) error {
-	if strings.TrimSpace(c.Task) == "" || strings.TrimSpace(c.PermittedTask) == "" || canonical(c.Task) == canonical(c.PermittedTask) || strings.TrimSpace(c.Rationale) == "" || len(c.Permissions) == 0 || len(c.PermittedPermissions) == 0 {
-		return fmt.Errorf("missing trusted authorization contract")
+	if strings.TrimSpace(c.Task) == "" {
+		return fmt.Errorf("contract_missing_task: authorized_task is empty")
+	}
+	if strings.TrimSpace(c.PermittedTask) == "" {
+		return fmt.Errorf("contract_missing_task: permitted_task is empty")
+	}
+	if canonical(c.Task) == canonical(c.PermittedTask) {
+		return fmt.Errorf("contract_equal_tasks: trusted task strings must differ")
+	}
+	if len(c.Permissions) == 0 {
+		return fmt.Errorf("contract_missing_permissions: permissions is empty")
+	}
+	if len(c.PermittedPermissions) == 0 {
+		return fmt.Errorf("contract_missing_permissions: permitted_permissions is empty")
+	}
+	if strings.TrimSpace(c.Rationale) == "" {
+		return fmt.Errorf("contract_missing_rationale")
 	}
 	for _, permission := range append(append([]string{}, c.Permissions...), c.PermittedPermissions...) {
 		if strings.TrimSpace(permission) == "" {

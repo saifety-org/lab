@@ -178,6 +178,20 @@ escalation_context motivates the NEW escalation_action beyond B, not a paraphras
 
 // CollectContracts fixes tasks, permissions, facts and operative requests from a validated plan before writing prose.
 func CollectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start, count, tokens int, license, out string) (err error) {
+	return collectContracts(ctx, c, rawPlan, start, count, tokens, license, out, false)
+}
+
+func CollectContractsV4(ctx context.Context, c *LocalClient, rawPlan []byte, start, count, tokens int, license, out string) error {
+	return collectContracts(ctx, c, rawPlan, start, count, tokens, license, out, true)
+}
+
+func collectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start, count, tokens int, license, out string, hardened bool) (err error) {
+	schema, prefix, recipe := "saifety-context-collection-receipt-v3", "v5c3-", "contract-v3-"
+	intentPrompt, documentPrompt, render := IntentPrompt, DocumentPrompt, RenderContract
+	if hardened {
+		schema, prefix, recipe = "saifety-context-collection-receipt-v4", "v5c4-", "contract-v4-"
+		intentPrompt, documentPrompt, render = IntentPromptV4, DocumentPromptV4, RenderContractV4
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Hour)
 	defer cancel()
 	var p Plan
@@ -207,11 +221,14 @@ func CollectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start
 	if err = os.Mkdir(out, 0700); err != nil {
 		return err
 	}
-	r := PairedReceipt{CollectionReceipt: CollectionReceipt{Schema: "saifety-context-collection-receipt-v3", PlanSHA256: Hash(rawPlan), Identity: identity, Start: start, Requested: count, UsageComplete: true, TokenCap: tokens, License: license, StartedUTC: time.Now().UTC().Format(time.RFC3339Nano)}, MaxRequests: 2 * count, Phase: "setup", Stages: []StageReceipt{}}
+	r := PairedReceipt{CollectionReceipt: CollectionReceipt{Schema: schema, PlanSHA256: Hash(rawPlan), Identity: identity, Start: start, Requested: count, UsageComplete: true, TokenCap: tokens, License: license, StartedUTC: time.Now().UTC().Format(time.RFC3339Nano)}, MaxRequests: 2 * count, Phase: "setup", Stages: []StageReceipt{}}
 	defer func() {
 		r.CompletedUTC = time.Now().UTC().Format(time.RFC3339Nano)
 		if err != nil {
 			r.Failure = "contract collection stopped; inspect phase/stages; no retry or repair"
+			if hardened {
+				r.Failure = err.Error()
+			}
 		}
 		e := WriteJSON(filepath.Join(out, "receipt.json"), r)
 		if err == nil {
@@ -222,7 +239,7 @@ func CollectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start
 		return err
 	}
 	for _, slot := range p.Slots[start : start+count] {
-		intentReply, e := c.pairedStage(ctx, slot, "intent", IntentPrompt(slot), tokens, intentSchema(), out, &r)
+		intentReply, e := c.pairedStage(ctx, slot, "intent", intentPrompt(slot), tokens, intentSchema(), out, &r)
 		if e != nil {
 			return e
 		}
@@ -237,7 +254,7 @@ func CollectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start
 			return e
 		}
 		r.Stages[len(r.Stages)-1].Status = "valid-intent"
-		docReply, e := c.pairedStage(ctx, slot, "documents", DocumentPrompt(slot, intent), tokens, documentSchema(), out, &r)
+		docReply, e := c.pairedStage(ctx, slot, "documents", documentPrompt(slot, intent), tokens, documentSchema(), out, &r)
 		if e != nil {
 			return e
 		}
@@ -245,20 +262,26 @@ func CollectContracts(ctx context.Context, c *LocalClient, rawPlan []byte, start
 		if len(docReply.Message.Content) > 32<<10 || Strict([]byte(docReply.Message.Content), &draft) != nil {
 			return fmt.Errorf("document_schema_invalid")
 		}
-		content, e := RenderContract(intent, draft, slot.Language)
+		content, e := render(intent, draft, slot.Language)
 		if e != nil {
+			if hardened {
+				r.Stages[len(r.Stages)-1].Status = "rejected-document-guards"
+			}
 			return e
 		}
 		stages := []StageEvidence{r.Stages[len(r.Stages)-2].StageEvidence, r.Stages[len(r.Stages)-1].StageEvidence}
 		prompts, _ := json.Marshal([]string{stages[0].PromptSHA256, stages[1].PromptSHA256})
 		replies, _ := json.Marshal([]string{stages[0].ResponseSHA256, stages[1].ResponseSHA256})
 		planBytes, _ := json.Marshal(intent)
-		id := fmt.Sprintf("v5c3-%s-%06d", p.ProtocolSHA256[:8], slot.Index)
-		f := Family{Schema: Schema, ID: id, Root: id, Template: "contract-v3-" + slot.Type, ProvenanceGroup: "ollama-" + recipes[slot.Index%len(recipes)], Language: slot.Language, Type: slot.Type, Channel: slot.Channel, License: license, Review: "pending", DocumentTrust: "untrusted", Tags: []string{slot.Type, "authorization-pair", "matched-task-counterfactual"}, Content: content, Origin: Origin{Method: "ollama", Author: "local-model:" + c.model, Recipe: "contract-v3-" + recipes[slot.Index%len(recipes)], Model: c.model, Digest: c.digest, Runtime: identity.Version, PromptSHA256: Hash(prompts), ResponseSHA256: Hash(replies), ContractSHA256: Hash(planBytes), Stages: stages, DerivedFrom: []string{}}}
+		id := fmt.Sprintf("%s%s-%06d", prefix, p.ProtocolSHA256[:8], slot.Index)
+		f := Family{Schema: Schema, ID: id, Root: id, Template: recipe + slot.Type, ProvenanceGroup: "ollama-" + recipes[slot.Index%len(recipes)], Language: slot.Language, Type: slot.Type, Channel: slot.Channel, License: license, Review: "pending", DocumentTrust: "untrusted", Tags: []string{slot.Type, "authorization-pair", "matched-task-counterfactual"}, Content: content, Origin: Origin{Method: "ollama", Author: "local-model:" + c.model, Recipe: recipe + recipes[slot.Index%len(recipes)], Model: c.model, Digest: c.digest, Runtime: identity.Version, PromptSHA256: Hash(prompts), ResponseSHA256: Hash(replies), ContractSHA256: Hash(planBytes), Stages: stages, DerivedFrom: []string{}}}
 		if e = Validate(f); e != nil {
 			return e
 		}
 		r.Stages[len(r.Stages)-1].Status = "valid-structure-semantic-review-pending"
+		if hardened {
+			r.Stages[len(r.Stages)-1].Status = "valid-draft-guards-semantic-review-pending"
+		}
 		r.Phase = "checkpoint"
 		if e = WriteJSON(filepath.Join(out, fmt.Sprintf("candidate-%06d.json", slot.Index)), f); e != nil {
 			return e
@@ -297,7 +320,9 @@ func CheckContracts(rows []Family, from string) (ContractReport, error) {
 		if err := Validate(f); err != nil {
 			return r, err
 		}
-		if !strings.HasPrefix(f.ID, "v5c3-") || !strings.HasPrefix(f.Origin.Recipe, "contract-v3-") {
+		v3 := strings.HasPrefix(f.ID, "v5c3-") && strings.HasPrefix(f.Origin.Recipe, "contract-v3-")
+		v4 := strings.HasPrefix(f.ID, "v5c4-") && strings.HasPrefix(f.Origin.Recipe, "contract-v4-")
+		if !v3 && !v4 {
 			return r, fmt.Errorf("not a contract candidate")
 		}
 		index, err := strconv.Atoi(f.ID[strings.LastIndex(f.ID, "-")+1:])
@@ -352,7 +377,11 @@ func CheckContracts(rows []Family, from string) (ContractReport, error) {
 		if Hash(b) != f.Origin.ContractSHA256 {
 			return r, fmt.Errorf("contract evidence mismatch")
 		}
-		c, err := RenderContract(p, d, f.Language)
+		render := RenderContract
+		if v4 {
+			render = RenderContractV4
+		}
+		c, err := render(p, d, f.Language)
 		if err != nil {
 			return r, err
 		}
@@ -391,7 +420,7 @@ func ReviewContracts(rows []Family, count int, out string) error {
 		if err := Validate(f); err != nil {
 			return err
 		}
-		if !strings.HasPrefix(f.Origin.Recipe, "contract-v3-") {
+		if !strings.HasPrefix(f.Origin.Recipe, "contract-v3-") && !strings.HasPrefix(f.Origin.Recipe, "contract-v4-") {
 			return fmt.Errorf("not a contract candidate")
 		}
 		for i, combination := range []item{{Task: f.Content.Task, Permissions: f.Content.Permissions, Documents: f.Content.Payload}, {Task: f.Content.Task, Permissions: f.Content.Permissions, Documents: f.Content.Benign}, {Task: f.Content.PermittedTask, Permissions: f.Content.PermittedPermissions, Documents: f.Content.Payload}, {Task: f.Content.PermittedTask, Permissions: f.Content.PermittedPermissions, Documents: f.Content.Escalation}} {

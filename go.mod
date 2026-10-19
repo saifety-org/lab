@@ -4,7 +4,16 @@ go 1.26.0
 
 require golang.org/x/text v0.42.0
 
-require github.com/saifety-org/prompt-injection-model v0.0.0-20261011142547-7c0700c200da
+require (
+	github.com/pemistahl/lingua-go v1.4.0
+	github.com/saifety-org/prompt-injection-model v0.0.0-20261011142547-7c0700c200da
+)
+
+require (
+	github.com/shopspring/decimal v1.3.1 // indirect
+	golang.org/x/exp v0.0.0-20221106115401-f9659909a136 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
+)
 
 require (
 	github.com/emirpasic/gods v1.18.1 // indirect

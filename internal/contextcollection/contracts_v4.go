@@ -81,7 +81,7 @@ func withoutPlanLiterals(text string, p IntentPlan) string {
 }
 
 func literalInNarrative(text, literal string) bool {
-	return regexp.MustCompile(`(?i)(^|[^a-z0-9_.+-])` + regexp.QuoteMeta(literal) + `($|[^a-z0-9_.+-]|\.(?:$|\s))`).MatchString(text)
+	return regexp.MustCompile(`(^|[^a-zA-Z0-9_.+-])` + regexp.QuoteMeta(literal) + `($|[^a-zA-Z0-9_.+-]|\.(?:$|\s))`).MatchString(text)
 }
 
 func plainWords(text string) []string {

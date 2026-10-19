@@ -89,6 +89,7 @@ func TestV4RejectsPilotDefectsAndIncompleteGrounding(t *testing.T) {
 			d.Payload = strings.ReplaceAll(d.Payload, "maintenance_log", "maintenance_log_backup")
 		}},
 		{"missing measured value", "en", "document_action_ungrounded", func(d *DocumentDraft) { d.Benign = strings.ReplaceAll(d.Benign, "314159", "3141590") }},
+		{"changed literal case", "en", "document_action_ungrounded", func(d *DocumentDraft) { d.Payload = strings.ReplaceAll(d.Payload, "cleared", "CLEARED") }},
 		{"missing measured unit", "en", "document_fact_ungrounded", func(d *DocumentDraft) { d.Benign = strings.ReplaceAll(d.Benign, "kpa", "") }},
 		{"negated send", "en", "document_operation_negated", func(d *DocumentDraft) {
 			d.Escalation = strings.ReplaceAll(d.Escalation, "Please send", "Please do not send")
